@@ -1,55 +1,35 @@
-import { NavigationBar } from "expo-navigation-bar";
-import React, { Component } from "react";
+import { fetchHomeData } from "@/hooks/actions";
 import {
+  AnimeImageProps,
+  FeaturedSlideProps,
+  RecentAnime,
+  TrendingAnime,
+} from "@/hooks/types";
+import { NavigationBar } from "expo-navigation-bar";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  Image,
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   View,
-  Pressable,
+  Dimensions,
+  ToastAndroid,
 } from "react-native";
 
-type ArtworkPalette = [string, string];
-
-type TrendingAnime = {
-  title: string;
-  subtitle: string;
-  episode: string;
-  rating: string;
-  palette: ArtworkPalette;
-  mark: string;
-  tag: string;
-};
-
-type ContinueAnime = {
-  title: string;
-  detail: string;
-  progress: `${number}%`;
-  palette: ArtworkPalette;
-  mark: string;
-};
-
-type ArtworkProps = {
-  palette: ArtworkPalette;
-  mark: string;
-  large?: boolean;
-};
-
-type SectionHeadingProps = {
-  title: string;
-  action?: string;
-};
-
 type TrendingCardProps = { item: TrendingAnime };
-type ContinueCardProps = { item: ContinueAnime };
-type ScreenProps = Record<string, never>;
-type ScreenState = Record<string, never>;
+type RecentCardProps = { item: RecentAnime };
+type SectionHeadingProps = { title: string; action?: string };
 
 const COLORS = {
   background: "#090A12",
-  surface: "#121421",
-  surfaceLight: "#191B2B",
   white: "#F8F7FF",
   muted: "#9294A8",
   purple: "#A78BFA",
@@ -58,83 +38,80 @@ const COLORS = {
   line: "rgba(255,255,255,0.09)",
 };
 
-const trending: TrendingAnime[] = [
-  {
-    title: "Demon Slayer",
-    subtitle: "Hashira Training Arc",
-    episode: "EP 08",
-    rating: "9.2",
-    palette: ["#39192D", "#9F4256"],
-    mark: "鬼",
-    tag: "TRENDING",
-  },
-  {
-    title: "Chainsaw Man",
-    subtitle: "The Chaos Begins",
-    episode: "EP 12",
-    rating: "8.8",
-    palette: ["#422417", "#B76A38"],
-    mark: "斬",
-    tag: "HOT",
-  },
-  {
-    title: "Frieren",
-    subtitle: "Beyond Journey’s End",
-    episode: "EP 21",
-    rating: "9.5",
-    palette: ["#172A3A", "#587E9B"],
-    mark: "旅",
-    tag: "MUST WATCH",
-  },
-  {
-    title: "Blue Lock",
-    subtitle: "Episode Nagi",
-    episode: "EP 06",
-    rating: "8.6",
-    palette: ["#14234B", "#3566B5"],
-    mark: "青",
-    tag: "NEW EP",
-  },
-];
+const initialSliderWidth = Dimensions.get("window").width - 36;
 
-const continueWatching: ContinueAnime[] = [
-  {
-    title: "Jujutsu Kaisen",
-    detail: "Season 2 · Episode 18",
-    progress: "72%",
-    palette: ["#241D42", "#7960B8"],
-    mark: "呪",
-  },
-  {
-    title: "Spy x Family",
-    detail: "Season 2 · Episode 07",
-    progress: "38%",
-    palette: ["#183534", "#4C8F7A"],
-    mark: "ス",
-  },
-  {
-    title: "Haikyu!!",
-    detail: "Season 4 · Episode 11",
-    progress: "54%",
-    palette: ["#4A2B1D", "#C67A3B"],
-    mark: "飛",
-  },
-];
-
-function Artwork({ palette, mark, large = false }: ArtworkProps) {
+function AnimeImage({ source, style, label = "ADD IMAGE" }: AnimeImageProps) {
   return (
-    <View
-      style={[
-        styles.artwork,
-        { backgroundColor: palette[0] },
-        large && styles.largeArtwork,
-      ]}
-    >
-      <View style={[styles.artGlow, { backgroundColor: palette[1] }]} />
-      <View style={styles.artRing} />
-      <View style={styles.artSlash} />
-      <Text style={[styles.artMark, large && styles.largeArtMark]}>{mark}</Text>
-      <View style={styles.artBottomShade} />
+    <View style={[styles.imageFrame, style]}>
+      {source ? (
+        <Image
+          source={source}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          fadeDuration={180}
+        />
+      ) : (
+        <View style={styles.imagePlaceholder}>
+          <View style={styles.placeholderIcon}>
+            <Text style={styles.placeholderIconText}>＋</Text>
+          </View>
+          <Text style={styles.placeholderLabel}>{label}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function FeaturedSlide({ item, width }: FeaturedSlideProps) {
+  return (
+    <View style={[styles.heroSlide, { width }]}>
+      <AnimeImage
+        source={item.image}
+        label={item.imageLabel}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.heroScrim} />
+      <View style={styles.heroTopRow}>
+        <View style={styles.featuredPill}>
+          <View style={styles.liveDot} />
+          <Text style={styles.featuredText}>FEATURED ANIME</Text>
+        </View>
+        <Pressable
+          style={styles.bookmarkButton}
+          accessibilityRole="button"
+          accessibilityLabel={`Add ${item.title} to watchlist`}
+        >
+          <Text style={styles.bookmarkGlyph}>＋</Text>
+        </Pressable>
+      </View>
+      <View style={styles.heroCopy}>
+        <Text style={styles.heroKicker}>{item.kicker}</Text>
+        <Text style={styles.heroTitle} numberOfLines={2}>
+          {item.title.toUpperCase()}
+        </Text>
+        <View style={styles.heroMetaRow}>
+          <Text style={styles.heroMeta}>{item.year}</Text>
+          <Text style={styles.metaDot}>•</Text>
+          <Text style={styles.heroMeta}>{item.genre}</Text>
+          <Text style={styles.metaDot}>•</Text>
+          <Text style={styles.heroMeta}>⭐ {item.rating}</Text>
+        </View>
+        <View style={styles.heroButtonRow}>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: `/watch/${item.id}` as any,
+              })
+            }
+            style={styles.watchButton}
+            accessibilityRole="button"
+          >
+            <Text style={styles.watchPlay}>▶</Text>
+            <Text style={styles.watchButtonText}>Watch now</Text>
+          </Pressable>
+          <Text style={styles.heroEpisodes}>{item.episodes}</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -158,7 +135,7 @@ function TrendingCard({ item }: TrendingCardProps) {
       accessibilityLabel={`${item.title}, rating ${item.rating}`}
     >
       <View style={styles.trendPoster}>
-        <Artwork palette={item.palette} mark={item.mark} />
+        <AnimeImage source={item.image} />
         <View style={styles.posterTag}>
           <Text style={styles.posterTagText}>{item.tag}</Text>
         </View>
@@ -177,207 +154,264 @@ function TrendingCard({ item }: TrendingCardProps) {
   );
 }
 
-function ContinueCard({ item }: ContinueCardProps) {
+function RecentCard({ item }: RecentCardProps) {
   return (
     <Pressable
-      style={styles.continueCard}
+      style={styles.recentCard}
       accessibilityRole="button"
-      accessibilityLabel={`Continue watching ${item.title}`}
+      accessibilityLabel={`${item.title}, ${item.episode}`}
     >
-      <View style={styles.continueArtWrap}>
-        <Artwork palette={item.palette} mark={item.mark} />
-        <View style={styles.playButton}>
-          <Text style={styles.playGlyph}>▶</Text>
-        </View>
-      </View>
-      <View style={styles.continueInfo}>
+      <AnimeImage source={item.image} style={styles.recentImage} />
+      <View style={styles.recentInfo}>
+        <Text style={styles.recentRelease}>{item.release}</Text>
         <Text style={styles.cardTitle} numberOfLines={1}>
           {item.title}
         </Text>
-        <Text style={styles.cardSubtitle}>{item.detail}</Text>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: item.progress }]} />
+        <Text style={styles.cardSubtitle} numberOfLines={1}>
+          {item.episode}
+        </Text>
+        <View style={styles.recentProgressTrack}>
+          <View style={styles.recentProgressFill} />
         </View>
       </View>
+      <Text style={styles.recentArrow}>›</Text>
     </Pressable>
   );
 }
 
-export default class Index extends Component<ScreenProps, ScreenState> {
-  render() {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.screen}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-            <StatusBar hidden={true} />
-            <NavigationBar hidden={true} />
-            <View style={styles.topBar}>
-              <View style={styles.brandLockup}>
-                <View style={styles.brandIcon}>
-                  <Text style={styles.brandIconText}>A</Text>
-                </View>
-                <Text style={styles.brandName}>anishie</Text>
-                <View style={styles.premiumPill}>
-                  <Text style={styles.premiumText}>PLUS</Text>
-                </View>
-              </View>
-              <View style={styles.topActions}>
-                <Pressable
-                  style={styles.iconButton}
-                  accessibilityRole="button"
-                  accessibilityLabel="Search"
-                >
-                  <Text style={styles.searchGlyph}>⌕</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.avatar}
-                  accessibilityRole="button"
-                  accessibilityLabel="Profile"
-                >
-                  <Text style={styles.avatarText}>Y</Text>
-                </Pressable>
-              </View>
-            </View>
+type SkeletonBlockProps = {
+  style?: import("react-native").StyleProp<import("react-native").ViewStyle>;
+};
 
-            <View style={styles.welcomeRow}>
-              <View>
-                <Text style={styles.eyebrow}>WEDNESDAY, NOVEMBER 11</Text>
-                <Text style={styles.welcomeTitle}>
-                  Your next{"\n"}
-                  <Text style={styles.welcomeAccent}>world awaits.</Text>
-                </Text>
-              </View>
-              <View style={styles.streakPill}>
-                <Text style={styles.streakIcon}>✦</Text>
-                <Text style={styles.streakText}>7 day streak</Text>
-              </View>
-            </View>
+function SkeletonBlock({ style }: SkeletonBlockProps) {
+  return <View style={[styles.skeletonBlock, style]} />;
+}
 
-            <Pressable
-              style={styles.heroCard}
-              accessibilityRole="button"
-              accessibilityLabel="Featured anime: Solo Leveling, watch now"
-            >
-              <View style={styles.heroBackdrop} />
-              <View style={styles.heroOrb} />
-              <View style={styles.heroHalo} />
-              <View style={styles.heroFigure}>
-                <Text style={styles.heroFigureMark}>影</Text>
-              </View>
-              <View style={styles.heroTopRow}>
-                <View style={styles.featuredPill}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.featuredText}>ANISHIE ORIGINAL</Text>
-                </View>
-                <Pressable
-                  style={styles.bookmarkButton}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add to watchlist"
-                >
-                  <Text style={styles.bookmarkGlyph}>＋</Text>
-                </Pressable>
-              </View>
-              <View style={styles.heroCopy}>
-                <Text style={styles.heroKicker}>
-                  THE WORLD’S WEAKEST{"\n"}HUNTER RISES
-                </Text>
-                <Text style={styles.heroTitle}>SOLO{"\n"}LEVELING</Text>
-                <View style={styles.heroMetaRow}>
-                  <Text style={styles.heroMeta}>2024</Text>
-                  <Text style={styles.metaDot}>•</Text>
-                  <Text style={styles.heroMeta}>Action</Text>
-                  <Text style={styles.metaDot}>•</Text>
-                  <Text style={styles.heroMeta}>⭐ 9.3</Text>
-                </View>
-                <View style={styles.heroButtonRow}>
-                  <Pressable
-                    style={styles.watchButton}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.watchPlay}>▶</Text>
-                    <Text style={styles.watchButtonText}>Watch now</Text>
-                  </Pressable>
-                  <Text style={styles.heroEpisodes}>S1 · 12 EPISODES</Text>
-                </View>
-              </View>
-              <View style={styles.heroPagination}>
-                <View style={styles.pageActive} />
-                <View style={styles.pageInactive} />
-                <View style={styles.pageInactive} />
-                <View style={styles.pageInactive} />
-              </View>
-              <Text style={styles.heroVerticalLabel}>LEVEL UP</Text>
-            </Pressable>
-
-            <View style={styles.genreRow}>
-              <Pressable style={[styles.genreChip, styles.genreChipActive]}>
-                <Text style={styles.genreActiveText}>✦ For you</Text>
-              </Pressable>
-              <Pressable style={styles.genreChip}>
-                <Text style={styles.genreText}>Action</Text>
-              </Pressable>
-              <Pressable style={styles.genreChip}>
-                <Text style={styles.genreText}>Fantasy</Text>
-              </Pressable>
-              <Pressable style={styles.genreChip}>
-                <Text style={styles.genreText}>Romance</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.sectionBlock}>
-              <SectionHeading title="Continue watching" action="View history" />
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.horizontalList}
-              >
-                {continueWatching.map((item) => (
-                  <ContinueCard key={item.title} item={item} />
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.sectionBlock}>
-              <SectionHeading title="Trending this week" />
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.horizontalList}
-              >
-                {trending.map((item) => (
-                  <TrendingCard key={item.title} item={item} />
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.newEpisodeBanner}>
-              <View style={styles.newEpisodeIcon}>
-                <Text style={styles.newEpisodeIconText}>✦</Text>
-              </View>
-              <View style={styles.newEpisodeCopy}>
-                <Text style={styles.newEpisodeTitle}>
-                  New episodes, right on time
-                </Text>
-                <Text style={styles.newEpisodeSub}>
-                  Your watchlist has 3 fresh drops
-                </Text>
-              </View>
-              <Text style={styles.bannerArrow}>›</Text>
-            </View>
-          </ScrollView>
+function FeaturedSkeleton({ width }: { width: number }) {
+  return (
+    <View
+      style={[styles.heroSlide, styles.featuredSkeleton, { width }]}
+      accessibilityLabel="Loading featured anime"
+    >
+      <View style={styles.skeletonHeroTop}>
+        <SkeletonBlock style={styles.skeletonFeaturedPill} />
+        <SkeletonBlock style={styles.skeletonBookmark} />
+      </View>
+      <View style={styles.skeletonHeroCopy}>
+        <SkeletonBlock style={styles.skeletonKicker} />
+        <SkeletonBlock style={styles.skeletonHeroTitle} />
+        <View style={styles.skeletonMetaRow}>
+          <SkeletonBlock style={styles.skeletonMeta} />
+          <SkeletonBlock style={styles.skeletonMeta} />
+          <SkeletonBlock style={styles.skeletonMetaShort} />
         </View>
-      </SafeAreaView>
+        <SkeletonBlock style={styles.skeletonWatchButton} />
+      </View>
+      <View style={styles.skeletonHeroDots}>
+        <SkeletonBlock style={styles.skeletonActiveDot} />
+        <SkeletonBlock style={styles.skeletonDot} />
+        <SkeletonBlock style={styles.skeletonDot} />
+      </View>
+    </View>
+  );
+}
+
+function TrendingSkeletonCard() {
+  return (
+    <View style={styles.trendCard} accessibilityLabel="Loading trending anime">
+      <SkeletonBlock style={styles.skeletonTrendPoster} />
+      <SkeletonBlock style={styles.skeletonTrendingTitle} />
+      <SkeletonBlock style={styles.skeletonTrendingSubtitle} />
+    </View>
+  );
+}
+
+function RecentSkeletonCard() {
+  return (
+    <View style={styles.recentCard} accessibilityLabel="Loading recent episode">
+      <SkeletonBlock style={styles.skeletonRecentImage} />
+      <View style={styles.skeletonRecentInfo}>
+        <SkeletonBlock style={styles.skeletonRecentRelease} />
+        <SkeletonBlock style={styles.skeletonRecentTitle} />
+        <SkeletonBlock style={styles.skeletonRecentSubtitle} />
+        <SkeletonBlock style={styles.skeletonRecentProgress} />
+      </View>
+      <SkeletonBlock style={styles.skeletonRecentArrow} />
+    </View>
+  );
+}
+
+export default function Index() {
+  const [activeSlide, setActiveSlide] = useState<number>(0);
+  const [sliderWidth, setSliderWidth] = useState<number>(initialSliderWidth);
+  const [data, setData] = useState<Awaited<
+    ReturnType<typeof fetchHomeData>
+  > | null>(null);
+
+  useEffect(() => {
+    const getData = async () => {
+      const data = await fetchHomeData();
+      if (data) {
+        setData(data);
+      } else {
+        ToastAndroid.showWithGravity(
+          "Something went wrong",
+          ToastAndroid.SHORT,
+          ToastAndroid.TOP,
+        );
+      }
+    };
+    getData();
+  }, []);
+
+  const handleHeroLayout = (event: LayoutChangeEvent): void => {
+    const width = event.nativeEvent.layout.width;
+    if (width > 0 && width !== sliderWidth) {
+      setSliderWidth(width);
+    }
+  };
+
+  const handleHeroScroll = (
+    event: NativeSyntheticEvent<NativeScrollEvent>,
+  ): void => {
+    if (sliderWidth <= 0) return;
+    const nextSlide = Math.round(
+      event.nativeEvent.contentOffset.x / sliderWidth,
     );
-  }
+    if (nextSlide !== activeSlide) {
+      setActiveSlide(nextSlide);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.screen}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <StatusBar hidden={true} />
+          <NavigationBar hidden={true} />
+
+          <View style={styles.topBar}>
+            <View style={styles.brandLockup}>
+              <View style={styles.brandIcon}>
+                <Text style={styles.brandIconText}>A</Text>
+              </View>
+              <Text style={styles.brandName}>anishie</Text>
+              <View style={styles.premiumPill}>
+                <Text style={styles.premiumText}>PLUS</Text>
+              </View>
+            </View>
+            <View style={styles.topActions}>
+              <Pressable
+                style={styles.iconButton}
+                accessibilityRole="button"
+                accessibilityLabel="Search"
+              >
+                <Text style={styles.searchGlyph}>⌕</Text>
+              </Pressable>
+              <Pressable
+                style={styles.avatar}
+                accessibilityRole="button"
+                accessibilityLabel="Profile"
+              >
+                <Text style={styles.avatarText}>Y</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.welcomeRow}>
+            <View>
+              <Text style={styles.eyebrow}>YOUR ANIME, ALL IN ONE PLACE</Text>
+              <Text style={styles.welcomeTitle}>Welcome back.</Text>
+            </View>
+            <View style={styles.streakPill}>
+              <Text style={styles.streakIcon}>✦</Text>
+              <Text style={styles.streakText}>7 day streak</Text>
+            </View>
+          </View>
+
+          <View style={styles.heroCard}>
+            {data ? (
+              <>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  bounces={false}
+                  showsHorizontalScrollIndicator={false}
+                  onLayout={handleHeroLayout}
+                  onMomentumScrollEnd={handleHeroScroll}
+                  accessibilityLabel="Featured anime slider. Swipe to view more anime."
+                >
+                  {data.featured.map((item) => (
+                    <FeaturedSlide
+                      key={item.title}
+                      item={item}
+                      width={sliderWidth}
+                    />
+                  ))}
+                </ScrollView>
+                <View
+                  style={styles.heroPagination}
+                  accessibilityLabel={`Featured anime ${activeSlide + 1} of ${data.featured.length}`}
+                >
+                  {data.featured.map((item, index) => (
+                    <View key={item.title} style={styles.paginationTapTarget}>
+                      <View
+                        style={[
+                          styles.pageDot,
+                          activeSlide === index && styles.pageDotActive,
+                        ]}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <FeaturedSkeleton width={sliderWidth} />
+            )}
+          </View>
+
+          <View style={styles.sectionBlock}>
+            <SectionHeading title="Trending this week" action="See all" />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {data
+                ? data.trending.map((item) => (
+                    <TrendingCard key={item.title} item={item} />
+                  ))
+                : Array.from({ length: 4 }, (_, index) => (
+                    <TrendingSkeletonCard key={`trending-skeleton-${index}`} />
+                  ))}
+            </ScrollView>
+          </View>
+
+          <View style={styles.sectionBlock}>
+            <SectionHeading title="Recent episodes" action="View all" />
+            <View style={styles.recentList}>
+              {data
+                ? data.recent.map((item) => (
+                    <RecentCard key={item.title} item={item} />
+                  ))
+                : Array.from({ length: 3 }, (_, index) => (
+                    <RecentSkeletonCard key={`recent-skeleton-${index}`} />
+                  ))}
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.background },
   screen: { flex: 1, backgroundColor: COLORS.background },
-  scrollContent: { paddingBottom: 24 },
+  scrollContent: { paddingBottom: 28 },
   topBar: {
     paddingHorizontal: 22,
     paddingTop: 8,
@@ -467,12 +501,10 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     color: COLORS.white,
-    fontSize: 29,
+    fontSize: 27,
     fontWeight: "800",
-    lineHeight: 33,
-    letterSpacing: -0.9,
+    letterSpacing: -0.8,
   },
-  welcomeAccent: { color: COLORS.purple },
   streakPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -482,67 +514,52 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    marginBottom: 5,
+    marginBottom: 1,
   },
   streakIcon: { color: "#FFD18A", fontSize: 12, marginRight: 5 },
   streakText: { color: "#D9D8E3", fontSize: 10, fontWeight: "600" },
   heroCard: {
+    height: 350,
     marginHorizontal: 18,
-    height: 370,
     borderRadius: 25,
     overflow: "hidden",
     backgroundColor: "#17182A",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  heroBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "#17182A",
-  },
-  heroOrb: {
-    position: "absolute",
-    width: 245,
-    height: 245,
-    borderRadius: 130,
-    backgroundColor: "#3A276B",
-    top: 34,
-    right: -43,
-    opacity: 0.76,
-  },
-  heroHalo: {
-    position: "absolute",
-    width: 174,
-    height: 174,
-    borderRadius: 100,
-    borderWidth: 1,
-    borderColor: "rgba(201,185,255,0.43)",
-    top: 69,
-    right: -2,
-  },
-  heroFigure: {
-    position: "absolute",
-    width: 126,
-    height: 255,
-    right: 27,
-    top: 77,
-    borderTopLeftRadius: 68,
-    borderTopRightRadius: 68,
-    borderBottomLeftRadius: 35,
-    borderBottomRightRadius: 35,
-    backgroundColor: "#27243D",
-    borderWidth: 1,
-    borderColor: "rgba(224,216,255,0.22)",
+  heroSlide: { height: "100%", overflow: "hidden", backgroundColor: "#17182A" },
+  imageFrame: { flex: 1, overflow: "hidden", backgroundColor: "#191B2B" },
+  imagePlaceholder: {
+    flex: 1,
     alignItems: "center",
-    justifyContent: "flex-start",
-    paddingTop: 21,
-    transform: [{ rotate: "5deg" }],
-    overflow: "hidden",
+    justifyContent: "center",
+    backgroundColor: "#191B2B",
   },
-  heroFigureMark: {
-    color: "#B9A6FF",
-    opacity: 0.8,
-    fontSize: 64,
-    fontWeight: "900",
+  placeholderIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 7,
+  },
+  placeholderIconText: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 22,
+    fontWeight: "300",
+    lineHeight: 25,
+  },
+  placeholderLabel: {
+    color: "rgba(255,255,255,0.52)",
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 1.3,
+  },
+  heroScrim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(8,8,16,0.38)",
   },
   heroTopRow: {
     position: "absolute",
@@ -557,7 +574,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 10,
     borderRadius: 20,
-    backgroundColor: "rgba(9,10,18,0.56)",
+    backgroundColor: "rgba(9,10,18,0.62)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.13)",
     flexDirection: "row",
@@ -592,28 +609,26 @@ const styles = StyleSheet.create({
     lineHeight: 25,
     fontWeight: "300",
   },
-  heroCopy: { position: "absolute", left: 19, bottom: 40, right: 12 },
+  heroCopy: { position: "absolute", left: 19, bottom: 38, right: 12 },
   heroKicker: {
-    color: "#C5B8F8",
+    color: "#D5CBF7",
     fontSize: 8,
     fontWeight: "800",
-    letterSpacing: 1.6,
-    lineHeight: 13,
+    letterSpacing: 1.4,
     marginBottom: 6,
   },
   heroTitle: {
     color: COLORS.white,
-    fontSize: 35,
+    fontSize: 31,
     fontWeight: "900",
-    letterSpacing: -1.2,
-    lineHeight: 34,
-    textShadowColor: "rgba(0,0,0,0.35)",
+    letterSpacing: -0.9,
+    textShadowColor: "rgba(0,0,0,0.45)",
     textShadowRadius: 8,
   },
-  heroMetaRow: { flexDirection: "row", alignItems: "center", marginTop: 9 },
+  heroMetaRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
   heroMeta: { color: "#D0CDDC", fontSize: 10, fontWeight: "600" },
-  metaDot: { color: "#77758A", fontSize: 12, marginHorizontal: 7 },
-  heroButtonRow: { flexDirection: "row", alignItems: "center", marginTop: 15 },
+  metaDot: { color: "#AAA6BB", fontSize: 12, marginHorizontal: 7 },
+  heroButtonRow: { flexDirection: "row", alignItems: "center", marginTop: 13 },
   watchButton: {
     backgroundColor: "#F5F1FF",
     height: 39,
@@ -626,7 +641,7 @@ const styles = StyleSheet.create({
   watchPlay: { color: "#171223", fontSize: 11, marginRight: 8 },
   watchButtonText: { color: "#171223", fontWeight: "800", fontSize: 11 },
   heroEpisodes: {
-    color: "rgba(255,255,255,0.67)",
+    color: "rgba(255,255,255,0.78)",
     fontSize: 8,
     fontWeight: "800",
     letterSpacing: 1,
@@ -634,59 +649,29 @@ const styles = StyleSheet.create({
   },
   heroPagination: {
     position: "absolute",
-    right: 18,
-    bottom: 16,
+    bottom: 11,
+    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 12,
+    backgroundColor: "rgba(8,8,16,0.25)",
   },
-  pageActive: {
-    width: 18,
-    height: 4,
-    borderRadius: 3,
-    backgroundColor: "#D4C7FF",
-    marginLeft: 4,
-  },
-  pageInactive: {
-    width: 5,
-    height: 4,
-    borderRadius: 3,
-    backgroundColor: "rgba(255,255,255,0.36)",
-    marginLeft: 4,
-  },
-  heroVerticalLabel: {
-    position: "absolute",
-    right: 13,
-    top: 153,
-    color: "rgba(255,255,255,0.47)",
-    fontSize: 7,
-    fontWeight: "800",
-    letterSpacing: 2,
-    transform: [{ rotate: "90deg" }],
-  },
-  genreRow: {
-    flexDirection: "row",
-    paddingLeft: 18,
-    paddingRight: 8,
-    paddingTop: 17,
-    paddingBottom: 3,
+  paginationTapTarget: {
+    minWidth: 20,
+    height: 18,
     alignItems: "center",
+    justifyContent: "center",
   },
-  genreChip: {
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderRadius: 17,
-    marginRight: 8,
-    backgroundColor: "rgba(255,255,255,0.045)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+  pageDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.55)",
   },
-  genreChipActive: {
-    backgroundColor: "rgba(167,139,250,0.15)",
-    borderColor: "rgba(167,139,250,0.34)",
-  },
-  genreText: { color: "#B1B2C1", fontSize: 10, fontWeight: "600" },
-  genreActiveText: { color: "#D6CAFF", fontSize: 10, fontWeight: "700" },
-  sectionBlock: { marginTop: 25 },
+  pageDotActive: { width: 18, backgroundColor: "#D4C7FF" },
+  sectionBlock: { marginTop: 26 },
   sectionHeading: {
     paddingHorizontal: 21,
     flexDirection: "row",
@@ -702,98 +687,6 @@ const styles = StyleSheet.create({
   },
   sectionAction: { color: COLORS.purple, fontSize: 10, fontWeight: "700" },
   horizontalList: { paddingLeft: 19, paddingRight: 10 },
-  continueCard: {
-    width: 258,
-    height: 83,
-    padding: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 17,
-    backgroundColor: "rgba(255,255,255,0.055)",
-    borderWidth: 1,
-    borderColor: COLORS.line,
-    marginRight: 10,
-  },
-  continueArtWrap: {
-    width: 64,
-    height: 63,
-    borderRadius: 11,
-    overflow: "hidden",
-  },
-  artwork: {
-    flex: 1,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  artGlow: {
-    position: "absolute",
-    width: 70,
-    height: 70,
-    borderRadius: 40,
-    top: -14,
-    right: -13,
-    opacity: 0.8,
-  },
-  artRing: {
-    position: "absolute",
-    width: 54,
-    height: 54,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    top: 10,
-    left: 5,
-  },
-  artSlash: {
-    position: "absolute",
-    width: 4,
-    height: 120,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    transform: [{ rotate: "35deg" }],
-  },
-  artMark: {
-    color: "rgba(255,255,255,0.84)",
-    fontSize: 34,
-    fontWeight: "900",
-    textShadowColor: "rgba(0,0,0,0.26)",
-    textShadowRadius: 6,
-  },
-  largeArtwork: { minHeight: 150 },
-  largeArtMark: { fontSize: 58 },
-  artBottomShade: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 28,
-    backgroundColor: "rgba(0,0,0,0.14)",
-  },
-  playButton: {
-    position: "absolute",
-    alignSelf: "center",
-    top: 18,
-    width: 27,
-    height: 27,
-    borderRadius: 14,
-    backgroundColor: "rgba(9,10,18,0.56)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playGlyph: { color: "#FFFFFF", fontSize: 9, marginLeft: 2 },
-  continueInfo: { flex: 1, marginLeft: 11, justifyContent: "center" },
-  cardTitle: { color: COLORS.white, fontSize: 12, fontWeight: "700" },
-  cardSubtitle: { color: COLORS.muted, fontSize: 9, marginTop: 4 },
-  progressTrack: {
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    marginTop: 10,
-    overflow: "hidden",
-  },
-  progressFill: { height: 3, borderRadius: 2, backgroundColor: COLORS.purple },
   trendCard: { width: 126, marginRight: 11 },
   trendPoster: {
     height: 155,
@@ -807,7 +700,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 7,
     top: 7,
-    backgroundColor: "rgba(10,10,18,0.58)",
+    backgroundColor: "rgba(10,10,18,0.68)",
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 4,
@@ -827,40 +720,141 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: "rgba(9,10,18,0.72)",
+    backgroundColor: "rgba(9,10,18,0.76)",
   },
   ratingStar: { color: "#FFD27B", fontSize: 9, marginRight: 4 },
   ratingText: { color: "#FFFFFF", fontSize: 9, fontWeight: "800" },
-  newEpisodeBanner: {
-    marginHorizontal: 19,
-    marginTop: 24,
-    marginBottom: 6,
-    paddingHorizontal: 13,
-    paddingVertical: 13,
-    borderRadius: 17,
+  cardTitle: { color: COLORS.white, fontSize: 12, fontWeight: "700" },
+  cardSubtitle: { color: COLORS.muted, fontSize: 9, marginTop: 4 },
+  recentList: { paddingHorizontal: 19 },
+  recentCard: {
+    height: 91,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(131,231,244,0.07)",
+    padding: 8,
+    marginBottom: 9,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.055)",
     borderWidth: 1,
-    borderColor: "rgba(131,231,244,0.15)",
+    borderColor: COLORS.line,
   },
-  newEpisodeIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 12,
-    backgroundColor: "rgba(131,231,244,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  newEpisodeIconText: { color: COLORS.cyan, fontSize: 17 },
-  newEpisodeCopy: { flex: 1 },
-  newEpisodeTitle: { color: COLORS.white, fontSize: 11, fontWeight: "700" },
-  newEpisodeSub: { color: COLORS.muted, fontSize: 9, marginTop: 4 },
-  bannerArrow: {
+  recentImage: { width: 70, height: 73, borderRadius: 11, flex: 0 },
+  recentInfo: { flex: 1, marginLeft: 12 },
+  recentRelease: {
     color: COLORS.cyan,
-    fontSize: 24,
+    fontSize: 7,
+    fontWeight: "900",
+    letterSpacing: 1,
+    marginBottom: 5,
+  },
+  recentProgressTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    marginTop: 8,
+    overflow: "hidden",
+  },
+  recentProgressFill: {
+    width: "35%",
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: COLORS.purple,
+  },
+  recentArrow: {
+    color: COLORS.muted,
+    fontSize: 23,
     fontWeight: "300",
-    marginLeft: 8,
+    marginHorizontal: 5,
+  },
+
+  // Loading placeholders match the existing cards and dark glass palette.
+  skeletonBlock: {
+    backgroundColor: "#252738",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.035)",
+  },
+  featuredSkeleton: {
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 13,
+    backgroundColor: "#17182A",
+  },
+  skeletonHeroTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  skeletonFeaturedPill: { width: 122, height: 28, borderRadius: 18 },
+  skeletonBookmark: { width: 31, height: 31, borderRadius: 12 },
+  skeletonHeroCopy: { position: "absolute", left: 19, right: 24, bottom: 40 },
+  skeletonKicker: {
+    width: "66%",
+    height: 9,
+    borderRadius: 5,
+    marginBottom: 10,
+  },
+  skeletonHeroTitle: {
+    width: "83%",
+    height: 31,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  skeletonMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  skeletonMeta: { width: 42, height: 8, borderRadius: 4, marginRight: 10 },
+  skeletonMetaShort: { width: 32, height: 8, borderRadius: 4 },
+  skeletonWatchButton: { width: 116, height: 39, borderRadius: 13 },
+  skeletonHeroDots: {
+    position: "absolute",
+    bottom: 14,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  skeletonActiveDot: {
+    width: 18,
+    height: 4,
+    borderRadius: 3,
+    marginHorizontal: 3,
+  },
+  skeletonDot: { width: 5, height: 4, borderRadius: 3, marginHorizontal: 3 },
+  skeletonTrendPoster: { height: 155, borderRadius: 16, marginBottom: 9 },
+  skeletonTrendingTitle: {
+    width: "78%",
+    height: 10,
+    borderRadius: 5,
+    marginBottom: 6,
+  },
+  skeletonTrendingSubtitle: { width: "92%", height: 8, borderRadius: 4 },
+  skeletonRecentImage: { width: 70, height: 73, borderRadius: 11, flex: 0 },
+  skeletonRecentInfo: { flex: 1, marginLeft: 12 },
+  skeletonRecentRelease: {
+    width: 78,
+    height: 7,
+    borderRadius: 4,
+    marginBottom: 7,
+  },
+  skeletonRecentTitle: {
+    width: "72%",
+    height: 10,
+    borderRadius: 5,
+    marginBottom: 6,
+  },
+  skeletonRecentSubtitle: { width: "88%", height: 8, borderRadius: 4 },
+  skeletonRecentProgress: {
+    width: "95%",
+    height: 3,
+    borderRadius: 2,
+    marginTop: 9,
+  },
+  skeletonRecentArrow: {
+    width: 10,
+    height: 20,
+    borderRadius: 5,
+    marginHorizontal: 5,
   },
 });
