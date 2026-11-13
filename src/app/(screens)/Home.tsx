@@ -121,7 +121,7 @@ function SectionHeading({ title, action = "See all" }: SectionHeadingProps) {
     <View style={styles.sectionHeading}>
       <Text style={styles.sectionTitle}>{title}</Text>
       <Pressable accessibilityRole="button" hitSlop={8}>
-        <Text style={styles.sectionAction}>{action} ›</Text>
+        {action !== "na" && <Text style={styles.sectionAction}>{action} ›</Text>}
       </Pressable>
     </View>
   );
@@ -133,6 +133,11 @@ function TrendingCard({ item }: TrendingCardProps) {
       style={styles.trendCard}
       accessibilityRole="button"
       accessibilityLabel={`${item.title}, rating ${item.rating}`}
+      onPress={() => {
+        router.push({
+          pathname: `/watch/${item.id}` as any
+        })
+      }}
     >
       <View style={styles.trendPoster}>
         <AnimeImage source={item.image} />
@@ -374,7 +379,7 @@ export default function Index() {
           </View>
 
           <View style={styles.sectionBlock}>
-            <SectionHeading title="Trending this week" action="See all" />
+            <SectionHeading title="Trending this week" action="na" />
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}

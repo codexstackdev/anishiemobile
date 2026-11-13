@@ -19,6 +19,7 @@ export type TrendingAnime = Anime & {
   subtitle: string;
   rating: string;
   tag: string;
+  id: string;
 };
 
 export type RecentAnime = Anime & {
