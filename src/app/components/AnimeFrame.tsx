@@ -13,8 +13,20 @@ const COLORS = {
   border: "rgba(255,255,255,0.09)",
 };
 
-export default function AnimeFrame({id} : {id: string}) {
-    const crashFreeLocationBlocker = `
+export default function AnimeFrame({
+  id,
+  audio,
+  server,
+  episode,
+  season,
+}: {
+  id: string;
+  audio: "sub" | "dub";
+  server?: String;
+  episode?: Number;
+  season?: string;
+}) {
+  const crashFreeLocationBlocker = `
 (function() {
   document.addEventListener('touchstart', function(e) {
     if (e.touches.length > 1) e.preventDefault();
@@ -77,7 +89,7 @@ export default function AnimeFrame({id} : {id: string}) {
 true;
 `;
 
-    const INJECTED_JS = `
+  const INJECTED_JS = `
   (function() {
     const style = document.createElement('style');
     style.textContent = \`
@@ -100,29 +112,40 @@ true;
 
   true;
 `;
-
-    return (
-      <>
-        <WebView
-          source={{
-            uri: `${process.env.EXPO_PUBLIC_API_WATCH}/stream/ani/${id}/1/sub`,
-            headers: { 
-                Referer: `${process.env.EXPO_PUBLIC_API_WATCH}`
-             },
-          }}
-          allowsFullscreenVideo={true}
-          injectedJavaScriptBeforeContentLoaded={crashFreeLocationBlocker}
-          injectedJavaScript={INJECTED_JS}
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
-          javaScriptEnabled={true}
-          scalesPageToFit={true}
-          backgroundColor="black"
-          style={styles.playerFrame}
-        />
-      </>
-    );
-  }
+  const finalUrl =
+    server === "s1"
+      ? `${process.env.EXPO_PUBLIC_API_WATCH}/stream/ani/${id}/${episode}/${audio}`
+      : server === "s2"
+        ? `${process.env.EXPO_PUBLIC_API_WATCH1}/embed/ani/${id}/${episode}?track=${audio}&autoPlay=1&muted=0&autoSkip=1&autoNext=0&start=0&accent=83e7f4&captionBg=0&hide=next%2Cpip%2Cserver%2Caudio&logo=https://ik.imagekit.io/zyntax/875870128_18108672005577199_374984678886188044_n.jpg&captionSize=s`
+        : "";
+  const finalRef =
+    server === "s1"
+      ? `${process.env.EXPO_PUBLIC_API_WATCH}`
+      : server === "s2"
+        ? `${process.env.EXPO_PUBLIC_API_WATCH1}`
+        : "";
+  return (
+    <>
+      <WebView
+        source={{
+          uri: finalUrl,
+          headers: {
+            Referer: finalRef,
+          },
+        }}
+        allowsFullscreenVideo={true}
+        injectedJavaScriptBeforeContentLoaded={crashFreeLocationBlocker}
+        injectedJavaScript={INJECTED_JS}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        javaScriptEnabled={true}
+        scalesPageToFit={true}
+        backgroundColor="black"
+        style={styles.playerFrame}
+      />
+    </>
+  );
+}
 
 const styles = StyleSheet.create({
   playerFrame: {

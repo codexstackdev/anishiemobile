@@ -36,3 +36,40 @@ export type FeaturedSlideProps = {
   item: FeaturedAnime;
   width: number;
 };
+
+export type Episode = {
+  id: string;
+  number: number;
+  title: string;
+  description: string;
+  duration: string;
+  image?: ImageSourcePropType;
+};
+
+export type AnimeSeason = {
+  id: string;
+  label: string;
+  episodeCount: number;
+  episodes: Episode[];
+};
+
+export type CastMember = {
+  id: string;
+  name: string;
+  role: string;
+  voiceActor: string;
+  image?: ImageSourcePropType;
+};
+
+export type RelatedAnime = {
+  id: string;
+  title: string;
+  detail: string;
+  image?: ImageSourcePropType;
+};
+
+export type EpisodeRange = {
+  start: number;
+  end: number;
+  label: string;
+};

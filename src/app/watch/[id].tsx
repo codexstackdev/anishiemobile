@@ -1,56 +1,37 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
   ImageSourcePropType,
+  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
-  StatusBar,
   StyleProp,
   StyleSheet,
   Text,
+  ToastAndroid,
   View,
   ViewStyle,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import AnimeFrame from "../components/AnimeFrame";
+import { Episode, EpisodeRange } from "@/hooks/types";
+import { AnimeDetails, fetchAnimeDetails } from "@/hooks/actions";
 
-type Episode = {
-  id: string;
-  number: number;
-  title: string;
-  description: string;
-  duration: string;
-  image?: ImageSourcePropType;
-};
+type EpisodeViewMode = "list" | "grid";
+type AudioMode = "sub" | "dub";
 
-type AnimeSeason = {
+type PlayerServer = {
   id: string;
   label: string;
-  episodeCount: number;
-  episodes: Episode[];
-};
-
-type CastMember = {
-  id: string;
-  name: string;
-  role: string;
-  voiceActor: string;
-  image?: ImageSourcePropType;
-};
-
-type RelatedAnime = {
-  id: string;
-  title: string;
   detail: string;
-  image?: ImageSourcePropType;
 };
 
-type EpisodeRange = {
-  start: number;
-  end: number;
-  label: string;
-};
+const PLAYER_SERVERS: PlayerServer[] = [
+  { id: "s1", label: "Server 1", detail: "Fast · HD" },
+  { id: "s2", label: "Server 2", detail: "Backup · HD" },
+  { id: "s3", label: "Server 3", detail: "Alternate source" },
+];
 
 const COLORS = {
   background: "#090A12",
@@ -66,319 +47,16 @@ const COLORS = {
 
 const RANGE_SIZE = 10;
 
-const soloLevelingSeason1Episodes: Episode[] = [
-  {
-    id: "s1-e1",
-    number: 1,
-    title: "I'm Used to It",
+function createUnloadedEpisode(number: number): Episode {
+  return {
+    id: `unloaded-episode-${number}`,
+    number,
+    title: `Episode ${number}`,
     description:
-      "A low-ranked hunter enters a dangerous dungeon with his party.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e2",
-    number: 2,
-    title: "If I Had One More Chance",
-    description:
-      "The survivors discover the terrifying rules of the double dungeon.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e3",
-    number: 3,
-    title: "It's Like a Game",
-    description: "Jinwoo wakes up with a mysterious system only he can see.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e4",
-    number: 4,
-    title: "I've Gotta Get Stronger",
-    description: "A new quest pushes Jinwoo to test his limits.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e5",
-    number: 5,
-    title: "A Pretty Good Deal",
-    description: "Jinwoo returns to a dungeon with a plan and a new resolve.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e6",
-    number: 6,
-    title: "The Real Hunt Begins",
-    description: "A dangerous raid takes a turn no one expected.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e7",
-    number: 7,
-    title: "Let's See How Far I Can Go",
-    description: "Jinwoo faces a powerful opponent in a brutal fight.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e8",
-    number: 8,
-    title: "This Is Frustrating",
-    description: "The hunters prepare for a high-risk job in a red gate.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e9",
-    number: 9,
-    title: "You've Been Hiding Your Skills",
-    description:
-      "Jinwoo's abilities draw attention from the hunter association.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e10",
-    number: 10,
-    title: "What Is This, a Picnic?",
-    description: "A routine-looking mission becomes a fight for survival.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e11",
-    number: 11,
-    title: "A Knight Who Defends an Empty Throne",
-    description: "Jinwoo enters a new dungeon and meets its guardian.",
-    duration: "24 min",
-  },
-  {
-    id: "s1-e12",
-    number: 12,
-    title: "Arise",
-    description:
-      "Jinwoo faces his greatest challenge yet and discovers a new power.",
-    duration: "24 min",
-  },
-];
-
-const soloLevelingSeason2Episodes: Episode[] = [
-  {
-    id: "s2-e1",
-    number: 1,
-    title: "You Aren't E-Rank, Are You?",
-    description:
-      "Jinwoo's return from the Red Gate leaves the hunters questioning his rank.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e2",
-    number: 2,
-    title: "I Suppose You Aren't Aware",
-    description:
-      "The next stage of Jinwoo's journey brings new allies and new threats.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e3",
-    number: 3,
-    title: "Still a Long Way to Go",
-    description: "Jinwoo takes on a difficult challenge as the world watches.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e4",
-    number: 4,
-    title: "I Need to Stop Faking",
-    description: "A dangerous mission tests Jinwoo's growing strength.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e5",
-    number: 5,
-    title: "This Is What We're Trained to Do",
-    description: "Hunters gather for a raid that could change everything.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e6",
-    number: 6,
-    title: "Don't Look Down on My Guys",
-    description: "The raid party faces a threat stronger than expected.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e7",
-    number: 7,
-    title: "The 10th S-Rank Hunter",
-    description: "A powerful hunter arrives as the stakes continue to rise.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e8",
-    number: 8,
-    title: "Looking Up Was Tiring Me Out",
-    description: "Jinwoo prepares to face a formidable enemy.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e9",
-    number: 9,
-    title: "It Was All Worth It",
-    description: "A hard-fought battle brings unexpected consequences.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e10",
-    number: 10,
-    title: "We Need a Hero",
-    description: "The hunters make a last stand against an overwhelming force.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e11",
-    number: 11,
-    title: "It's Going to Get Even More Intense",
-    description: "Jinwoo's next challenge is closer than anyone expects.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e12",
-    number: 12,
-    title: "Are You the King of Humans?",
-    description:
-      "The battle reaches a turning point as Jinwoo reveals his strength.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e13",
-    number: 13,
-    title: "On to the Next Target",
-    description: "A new chapter begins after the dust settles.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e14",
-    number: 14,
-    title: "The Gate Opens",
-    description: "A mysterious gate appears and changes the hunters' plans.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e15",
-    number: 15,
-    title: "A Hunter's Resolve",
-    description: "Jinwoo and his allies prepare for another dangerous mission.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e16",
-    number: 16,
-    title: "Into the Dungeon",
-    description: "The team ventures deeper into an unknown dungeon.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e17",
-    number: 17,
-    title: "A New Power",
-    description: "Jinwoo discovers another way to use his growing abilities.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e18",
-    number: 18,
-    title: "The Shadow Army",
-    description: "The shadows gather as a new enemy makes its move.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e19",
-    number: 19,
-    title: "The Strongest Hunter",
-    description: "A clash between powerful hunters becomes unavoidable.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e20",
-    number: 20,
-    title: "The Long Night",
-    description: "The hunters face a night that will test every one of them.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e21",
-    number: 21,
-    title: "A Promise to Keep",
-    description: "Jinwoo follows a lead that could change his next move.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e22",
-    number: 22,
-    title: "The Final Trial",
-    description: "One final challenge stands between Jinwoo and his goal.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e23",
-    number: 23,
-    title: "The King Returns",
-    description: "An old threat returns with a powerful new form.",
-    duration: "24 min",
-  },
-  {
-    id: "s2-e24",
-    number: 24,
-    title: "Arise Again",
-    description: "The season's story reaches a dramatic conclusion.",
-    duration: "24 min",
-  },
-];
-
-const seasons: AnimeSeason[] = [
-  {
-    id: "season-1",
-    label: "Season 1",
-    episodeCount: soloLevelingSeason1Episodes.length,
-    episodes: soloLevelingSeason1Episodes,
-  },
-  {
-    id: "season-2",
-    label: "Season 2",
-    episodeCount: soloLevelingSeason2Episodes.length,
-    episodes: soloLevelingSeason2Episodes,
-  },
-];
-
-const cast: CastMember[] = [
-  {
-    id: "jinwoo",
-    name: "Sung Jinwoo",
-    role: "Main character",
-    voiceActor: "Taito Ban",
-  },
-  {
-    id: "chae",
-    name: "Cha Hae-in",
-    role: "S-Rank hunter",
-    voiceActor: "Reina Ueda",
-  },
-  {
-    id: "jinho",
-    name: "Yoo Jinho",
-    role: "Jinwoo's partner",
-    voiceActor: "Genta Nakamura",
-  },
-  {
-    id: "go",
-    name: "Go Gunhee",
-    role: "Hunter Association",
-    voiceActor: "Banjou Ginga",
-  },
-];
-
-const relatedAnime: RelatedAnime[] = [
-  { id: "kaiju", title: "Kaiju No. 8", detail: "Action · 2024" },
-  { id: "eminence", title: "The Eminence in Shadow", detail: "Fantasy · 2022" },
-  { id: "demon-slayer", title: "Demon Slayer", detail: "Action · 2019" },
-  { id: "tower", title: "Tower of God", detail: "Adventure · 2020" },
-];
+      "Episode details have not been loaded from the data source yet.",
+    duration: "--:--",
+  };
+}
 
 function rangeLabel(start: number, end: number): string {
   return `${start}–${end}`;
@@ -416,20 +94,29 @@ function EpisodeCard({
   episode,
   selected,
   onPress,
+  viewMode,
 }: {
   episode: Episode;
   selected: boolean;
   onPress: () => void;
+  viewMode: EpisodeViewMode;
 }) {
+  const isGrid = viewMode === "grid";
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.episodeCard, selected && styles.episodeCardSelected]}
+      style={[
+        styles.episodeCard,
+        isGrid && styles.episodeCardGrid,
+        selected && styles.episodeCardSelected,
+      ]}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={`Play episode ${episode.number}: ${episode.title}`}
     >
-      <View style={styles.episodeImageWrap}>
+      <View
+        style={[styles.episodeImageWrap, isGrid && styles.episodeImageWrapGrid]}
+      >
         <PosterPlaceholder
           label={`EP ${String(episode.number).padStart(2, "0")}`}
           source={episode.image}
@@ -439,7 +126,7 @@ function EpisodeCard({
         </View>
         <Text style={styles.episodeDuration}>{episode.duration}</Text>
       </View>
-      <View style={styles.episodeInfo}>
+      <View style={[styles.episodeInfo, isGrid && styles.episodeInfoGrid]}>
         <View style={styles.episodeTitleRow}>
           <View
             style={[
@@ -456,377 +143,755 @@ function EpisodeCard({
               {String(episode.number).padStart(2, "0")}
             </Text>
           </View>
-          <Text style={styles.episodeTitle} numberOfLines={1}>
+          <Text style={styles.episodeTitle} numberOfLines={isGrid ? 2 : 1}>
             {episode.title}
           </Text>
         </View>
-        <Text style={styles.episodeDescription} numberOfLines={2}>
+        <Text
+          style={[
+            styles.episodeDescription,
+            episode.id.startsWith("unloaded-episode-") &&
+              styles.unloadedEpisodeDescription,
+          ]}
+          numberOfLines={isGrid ? 3 : 2}
+        >
           {episode.description}
         </Text>
       </View>
-      <Text style={styles.episodeMore}>•••</Text>
+      {!isGrid && <Text style={styles.episodeMore}>•••</Text>}
     </Pressable>
   );
 }
 
+function SkeletonBlock({ style }: { style?: StyleProp<ViewStyle> }) {
+  return <View style={[styles.skeletonBlock, style]} />;
+}
+
+function EpisodeSkeletonCard({ viewMode }: { viewMode: EpisodeViewMode }) {
+  const isGrid = viewMode === "grid";
+  return (
+    <View
+      style={[
+        styles.episodeCard,
+        styles.skeletonEpisodeCard,
+        isGrid && styles.episodeCardGrid,
+      ]}
+      accessibilityLabel="Loading episode"
+    >
+      <SkeletonBlock
+        style={[
+          styles.episodeImageWrap,
+          styles.skeletonEpisodeImage,
+          isGrid && styles.episodeImageWrapGrid,
+        ]}
+      />
+      <View style={[styles.episodeInfo, isGrid && styles.episodeInfoGrid]}>
+        <SkeletonBlock style={styles.skeletonEpisodeTitle} />
+        <SkeletonBlock style={styles.skeletonEpisodeDescription} />
+      </View>
+    </View>
+  );
+}
+
+type Season = AnimeDetails["seasons"][number];
+
 export default function Watch() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const [selectedSeasonId, setSelectedSeasonId] = useState<string>("season-2");
-  const [selectedEpisodeId, setSelectedEpisodeId] = useState<string>("s2-e1");
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string>("season-1");
+  const [selectedEpisodeId, setSelectedEpisodeId] =
+    useState<string>("unloaded-episode-1");
+  const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState<number>(1);
   const [selectedRangeIndex, setSelectedRangeIndex] = useState<number>(0);
+  const [audioMode, setAudioMode] = useState<AudioMode>("sub");
+  const [selectedServerId, setSelectedServerId] = useState<string>("s1");
+  const [isServerPickerVisible, setIsServerPickerVisible] =
+    useState<boolean>(false);
+  const [episodeView, setEpisodeView] = useState<EpisodeViewMode>("list");
+  const [data, setData] = useState<AnimeDetails | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSynopsisExpanded, setIsSynopsisExpanded] = useState<boolean>(false);
 
-  const selectedSeason =
-    seasons.find((season) => season.id === selectedSeasonId) ?? seasons[0];
+  useEffect(() => {
+    let isActive = true;
+    setIsLoading(true);
+    setData(null);
+    setIsSynopsisExpanded(false);
+    setSelectedRangeIndex(0);
+    setSelectedEpisodeNumber(1);
+    setSelectedEpisodeId("unloaded-episode-1");
+    const getData = async () => {
+      try {
+        const result = await fetchAnimeDetails(Number(id));
+        if (!isActive) return;
+        if (result) {
+          setData(result);
+          const firstEpisode = result.episodes.find(
+            (episode) => Number(episode.number) === 1,
+          );
+          const initialEpisode = firstEpisode ?? createUnloadedEpisode(1);
+          setSelectedEpisodeId(initialEpisode.id);
+          setSelectedEpisodeNumber(1);
+          setSelectedRangeIndex(0);
+        } else {
+          ToastAndroid.showWithGravity(
+            "Something went wrong",
+            ToastAndroid.TOP,
+            ToastAndroid.SHORT,
+          );
+        }
+      } catch (error) {
+        console.log(error);
+      } finally {
+        if (isActive) setIsLoading(false);
+      }
+    };
+    getData();
+
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
+
+  const episodes = data?.episodes ?? [];
+  const seasons = data?.seasons ?? [];
+  const currentSeason = seasons.find((s) => s.current);
+  const seasonLabel = currentSeason?.label ?? "Season 1";
+  const highestLoadedEpisodeNumber = episodes.reduce(
+    (highest, episode) => Math.max(highest, Number(episode.number) || 0),
+    0,
+  );
+  const totalEpisodeCount = Math.max(
+    Number(data?.episodeCount) || 0,
+    highestLoadedEpisodeNumber,
+    episodes.length,
+  );
+
   const episodeRanges = useMemo<EpisodeRange[]>(() => {
     const ranges: EpisodeRange[] = [];
-    for (
-      let start = 1;
-      start <= selectedSeason.episodes.length;
-      start += RANGE_SIZE
-    ) {
-      const end = Math.min(
-        start + RANGE_SIZE - 1,
-        selectedSeason.episodes.length,
-      );
+    for (let start = 1; start <= totalEpisodeCount; start += RANGE_SIZE) {
+      const end = Math.min(start + RANGE_SIZE - 1, totalEpisodeCount);
       ranges.push({ start, end, label: rangeLabel(start, end) });
     }
     return ranges;
-  }, [selectedSeason]);
+  }, [totalEpisodeCount]);
+
   const safeRangeIndex = Math.min(
     selectedRangeIndex,
     Math.max(episodeRanges.length - 1, 0),
   );
   const activeRange = episodeRanges[safeRangeIndex];
   const visibleEpisodes = activeRange
-    ? selectedSeason.episodes.filter(
-        (episode) =>
-          episode.number >= activeRange.start &&
-          episode.number <= activeRange.end,
+    ? Array.from(
+        { length: activeRange.end - activeRange.start + 1 },
+        (_, index) => {
+          const episodeNumber = activeRange.start + index;
+          return (
+            episodes.find(
+              (episode) => Number(episode.number) === episodeNumber,
+            ) ?? createUnloadedEpisode(episodeNumber)
+          );
+        },
       )
     : [];
-  const selectedEpisode = selectedSeason.episodes.find(
-    (episode) => episode.id === selectedEpisodeId,
-  ) ??
-    selectedSeason.episodes[0] ?? {
-      id: "episode-placeholder",
-      number: 1,
-      title: "Episode 1",
-      description: "Episode details will appear here.",
-      duration: "24 min",
-    };
+  const selectedEpisode: Episode =
+    episodes.find((episode) => episode.id === selectedEpisodeId) ??
+    episodes.find(
+      (episode) => Number(episode.number) === selectedEpisodeNumber,
+    ) ??
+    createUnloadedEpisode(selectedEpisodeNumber);
 
-  const selectSeason = (season: AnimeSeason) => {
-    setSelectedSeasonId(season.id);
-    setSelectedRangeIndex(0);
-    setSelectedEpisodeId(season.episodes[0]?.id ?? "");
+  const selectedServer = PLAYER_SERVERS.find(
+    (server) => server.id === selectedServerId,
+  ) ?? { id: "s1", label: "Server 1", detail: "Recommended" };
+
+  const synopsis = data?.synopsis ?? "";
+  const synopsisNeedsToggle = synopsis.length > 170;
+  const visibleSynopsis =
+    synopsisNeedsToggle && !isSynopsisExpanded
+      ? `${synopsis.slice(0, 170).trimEnd()}…`
+      : synopsis;
+
+  const selectSeason = (season: Season) => {
+    if (season.current) return;
+    router.setParams({ id: String(season.id) });
+  };
+
+  const openAnime = (animeId: string) => {
+    router.setParams({ id: animeId });
   };
 
   const selectEpisode = (episode: Episode) => {
     setSelectedEpisodeId(episode.id);
+    setSelectedEpisodeNumber(episode.number);
     const rangeIndex = episodeRanges.findIndex(
-      (range) => episode.number >= range.start && episode.number <= range.end,
+      (r) => episode.number >= r.start && episode.number <= r.end,
     );
     if (rangeIndex >= 0) setSelectedRangeIndex(rangeIndex);
   };
 
+  const selectEpisodeRange = (range: EpisodeRange, index: number) => {
+    setSelectedRangeIndex(index);
+    const firstEpisode =
+      episodes.find((episode) => Number(episode.number) === range.start) ??
+      createUnloadedEpisode(range.start);
+    setSelectedEpisodeId(firstEpisode.id);
+    setSelectedEpisodeNumber(firstEpisode.number);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Text style={styles.backGlyph}>‹</Text>
-          </Pressable>
-          <View style={styles.topTitleWrap}>
-            <Text style={styles.topEyebrow}>NOW WATCHING</Text>
-            <Text style={styles.topTitle}>{id}</Text>
-          </View>
-          <Pressable
-            style={styles.moreButton}
-            accessibilityRole="button"
-            accessibilityLabel="More options"
-          >
-            <Text style={styles.moreGlyph}>•••</Text>
-          </Pressable>
-        </View>
-
-        <AnimeFrame id={String(id)} />
-
-        <View style={styles.contentPadding}>
-          <View style={styles.currentEpisodeRow}>
-            <View style={styles.nowPlayingPill}>
-              <View style={styles.nowPlayingDot} />
-              <Text style={styles.nowPlayingText}>NOW PLAYING</Text>
-            </View>
-            <Text style={styles.currentEpisodeLabel}>
-              {selectedSeason.label} · Episode {selectedEpisode.number}
-            </Text>
-          </View>
-
-          <View style={styles.titleBlock}>
-            <View style={styles.titleAndRating}>
-              <Text style={styles.animeTitle}>Solo Leveling</Text>
-              <View style={styles.ratingPill}>
-                <Text style={styles.ratingStar}>★</Text>
-                <Text style={styles.ratingText}>9.3</Text>
-              </View>
-            </View>
-            <Text style={styles.episodeSubtitle}>
-              {selectedSeason.label} · Episode{" "}
-              {String(selectedEpisode.number).padStart(2, "0")}:{" "}
-              {selectedEpisode.title}
-            </Text>
-            <View style={styles.metadataRow}>
-              <Text style={styles.metaChip}>2024</Text>
-              <Text style={styles.metaSeparator}>•</Text>
-              <Text style={styles.metaChip}>Action</Text>
-              <Text style={styles.metaSeparator}>•</Text>
-              <Text style={styles.metaChip}>Fantasy</Text>
-              <Text style={styles.metaSeparator}>•</Text>
-              <Text style={styles.metaChip}>HD</Text>
-            </View>
-          </View>
-
-          <View style={styles.actionRow}>
+      <View style={styles.screen}>
+        <View style={styles.stickyHeader}>
+          <View style={styles.topBar}>
             <Pressable
-              style={styles.actionButton}
+              onPress={() => router.back()}
+              style={styles.backButton}
               accessibilityRole="button"
-              accessibilityLabel="Add to watchlist"
+              accessibilityLabel="Go back"
             >
-              <Text style={styles.actionIcon}>＋</Text>
-              <Text style={styles.actionLabel}>My List</Text>
+              <Text style={styles.backGlyph}>‹</Text>
             </Pressable>
-            <Pressable
-              style={styles.actionButton}
-              accessibilityRole="button"
-              accessibilityLabel="Share anime"
-            >
-              <Text style={styles.actionIcon}>↗</Text>
-              <Text style={styles.actionLabel}>Share</Text>
-            </Pressable>
-            <Pressable
-              style={styles.actionButton}
-              accessibilityRole="button"
-              accessibilityLabel="Download episode"
-            >
-              <Text style={styles.actionIcon}>⇩</Text>
-              <Text style={styles.actionLabel}>Download</Text>
-            </Pressable>
+            <View style={styles.topTitleWrap}>
+              <Text style={styles.topEyebrow}>NOW WATCHING</Text>
+              <Text style={styles.topTitle} numberOfLines={1}>
+                {data?.title}
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeading}>
-              <Text style={styles.sectionTitle}>Synopsis</Text>
-              <View style={styles.synopsisTag}>
-                <Text style={styles.synopsisTagText}>ANIME</Text>
-              </View>
-            </View>
-            <Text style={styles.synopsisText}>
-              They say whatever doesn’t kill you makes you stronger, but that’s
-              not the case for the world’s weakest hunter, Sung Jinwoo. After
-              being brutally slaughtered by monsters in a high-ranking dungeon,
-              Jinwoo returns with a mysterious System that only he can see. Now
-              he’s on a quest to level up and uncover the secrets behind his new
-              power.
-            </Text>
-            <Pressable style={styles.readMoreButton} accessibilityRole="button">
-              <Text style={styles.readMoreText}>Read full synopsis ˅</Text>
-            </Pressable>
+          <View style={styles.animeFrameContainer}>
+            <AnimeFrame id={String(id)} audio={audioMode} episode={selectedEpisodeNumber} server={selectedServerId} />
           </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeading}>
-              <View>
-                <Text style={styles.sectionTitle}>Choose a season</Text>
-                <Text style={styles.sectionCaption}>Continue the story</Text>
+          <View style={styles.pinnedDetails}>
+            <View style={styles.currentEpisodeRow}>
+              <View style={styles.nowPlayingPill}>
+                <View style={styles.nowPlayingDot} />
+                <Text style={styles.nowPlayingText}>NOW PLAYING</Text>
               </View>
-              <Text style={styles.seasonCount}>{seasons.length} SEASONS</Text>
+              {isLoading ? (
+                <SkeletonBlock style={styles.skeletonCurrentEpisode} />
+              ) : (
+                <Text style={styles.currentEpisodeLabel}>
+                  {seasonLabel} · Episode {selectedEpisode.number}
+                </Text>
+              )}
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.seasonList}
-            >
-              {seasons.map((season, index) => {
-                const selected = season.id === selectedSeasonId;
-                return (
-                  <Pressable
-                    key={season.id}
-                    onPress={() => selectSeason(season)}
-                    style={[
-                      styles.seasonCard,
-                      selected && styles.seasonCardSelected,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`Select ${season.label}`}
-                  >
-                    <PosterPlaceholder label={`S${index + 1}`} />
-                    <View style={styles.seasonCardOverlay} />
-                    <View style={styles.seasonCardCopy}>
-                      <Text style={styles.seasonCardLabel}>{season.label}</Text>
-                      <Text style={styles.seasonCardMeta}>
-                        {season.episodeCount} episodes
-                      </Text>
-                    </View>
-                    {selected && (
-                      <View style={styles.seasonSelectedMark}>
-                        <Text style={styles.seasonSelectedCheck}>✓</Text>
+            <View style={styles.titleBlock}>
+              <View style={styles.titleAndRating}>
+                {isLoading ? (
+                  <SkeletonBlock style={styles.skeletonTitle} />
+                ) : (
+                  <Text style={styles.animeTitle} numberOfLines={1}>
+                    {data?.title ?? "Anime"}
+                  </Text>
+                )}
+                <View style={styles.ratingPill}>
+                  <Text style={styles.ratingStar}>★</Text>
+                  <Text style={styles.ratingText}>{data?.rating}</Text>
+                </View>
+              </View>
+              {isLoading ? (
+                <SkeletonBlock style={styles.skeletonEpisodeSubtitle} />
+              ) : (
+                <Text style={styles.episodeSubtitle} numberOfLines={1}>
+                  {seasonLabel} · Episode{" "}
+                  {String(selectedEpisode.number).padStart(2, "0")}:{" "}
+                  {selectedEpisode.title}
+                </Text>
+              )}
+              <View style={styles.metadataRow}>
+                {isLoading ? (
+                  <>
+                    <SkeletonBlock style={styles.skeletonMetaTag} />
+                    <SkeletonBlock style={styles.skeletonMetaTagWide} />
+                    <SkeletonBlock style={styles.skeletonMetaTag} />
+                  </>
+                ) : (
+                  <>
+                    {data?.year != null && (
+                      <View style={styles.metadataTag}>
+                        <Text style={styles.metadataTagText}>{data.year}</Text>
                       </View>
                     )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeading}>
-              <View>
-                <Text style={styles.sectionTitle}>Episodes</Text>
-                <Text style={styles.sectionCaption}>
-                  {selectedSeason.label} · {selectedSeason.episodeCount}{" "}
-                  episodes
-                </Text>
+                    {(data?.genres ?? []).map((genre, index) => (
+                      <View key={`${genre}-${index}`} style={styles.genreChip}>
+                        <Text style={styles.genreChipText}>{genre}</Text>
+                      </View>
+                    ))}
+                    <View style={styles.metadataQualityChip}>
+                      <Text style={styles.metadataQualityText}>HD</Text>
+                    </View>
+                  </>
+                )}
               </View>
-              <Pressable style={styles.sortButton} accessibilityRole="button">
-                <Text style={styles.sortButtonText}>Oldest first ⌄</Text>
+            </View>
+          </View>
+        </View>
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.contentPadding}>
+            <View style={styles.actionRow}>
+              <Pressable
+                style={styles.actionButton}
+                accessibilityRole="button"
+                accessibilityLabel="Add to watchlist"
+              >
+                <Text style={styles.actionIcon}>＋</Text>
+                <Text style={styles.actionLabel}>My List</Text>
+              </Pressable>
+              <Pressable
+                style={styles.actionButton}
+                accessibilityRole="button"
+                accessibilityLabel="Share anime"
+              >
+                <Text style={styles.actionIcon}>↗</Text>
+                <Text style={styles.actionLabel}>Share</Text>
               </Pressable>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rangeList}
-            >
-              {episodeRanges.map((range, index) => {
-                const selected = index === safeRangeIndex;
-                return (
+            <View style={styles.playbackOptionsRow}>
+              <View style={styles.audioControlGroup}>
+                <Text style={styles.playbackOptionLabel}>AUDIO</Text>
+                <View style={styles.audioToggle}>
+                  {(["sub", "dub"] as const).map((mode) => (
+                    <Pressable
+                      key={mode}
+                      onPress={() => setAudioMode(mode)}
+                      style={[
+                        styles.audioToggleButton,
+                        audioMode === mode && styles.audioToggleButtonSelected,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: audioMode === mode }}
+                      accessibilityLabel={`${mode === "sub" ? "Subtitled" : "Dubbed"} audio`}
+                    >
+                      <Text
+                        style={[
+                          styles.audioToggleText,
+                          audioMode === mode && styles.audioToggleTextSelected,
+                        ]}
+                      >
+                        {mode}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setIsServerPickerVisible(true)}
+                style={styles.serverSelector}
+                accessibilityRole="button"
+                accessibilityLabel={`Choose video server. Current: ${selectedServer.label}`}
+              >
+                <View>
+                  <Text style={styles.playbackOptionLabel}>SERVER</Text>
+                  <Text style={styles.serverSelectedName}>
+                    {selectedServer.label}
+                  </Text>
+                </View>
+                <Text style={styles.serverChevron}>⌄</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeading}>
+                <Text style={styles.sectionTitle}>Synopsis</Text>
+                <View style={styles.synopsisTag}>
+                  <Text style={styles.synopsisTagText}>ANIME</Text>
+                </View>
+              </View>
+              {isLoading ? (
+                <View style={styles.synopsisSkeleton}>
+                  <SkeletonBlock style={styles.skeletonSynopsisLine} />
+                  <SkeletonBlock style={styles.skeletonSynopsisLine} />
+                  <SkeletonBlock style={styles.skeletonSynopsisLineShort} />
+                </View>
+              ) : (
+                <Text style={styles.synopsisText}>{visibleSynopsis}</Text>
+              )}
+              {!isLoading && synopsisNeedsToggle && (
+                <Pressable
+                  onPress={() => setIsSynopsisExpanded((expanded) => !expanded)}
+                  style={styles.readMoreButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isSynopsisExpanded
+                      ? "Show less synopsis"
+                      : "Read full synopsis"
+                  }
+                  accessibilityState={{ expanded: isSynopsisExpanded }}
+                >
+                  <Text style={styles.readMoreText}>
+                    {isSynopsisExpanded
+                      ? "Show less  ˄"
+                      : "Read full synopsis  ˅"}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeading}>
+                <View>
+                  <Text style={styles.sectionTitle}>
+                    {isLoading
+                      ? "Anime recommendations"
+                      : `Because you watched ${data?.title ?? "this anime"}`}
+                  </Text>
+                  <Text style={styles.sectionCaption}>
+                    Similar worlds, action and adventure
+                  </Text>
+                </View>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.relatedList}
+              >
+                {isLoading
+                  ? Array.from({ length: 4 }, (_, index) => (
+                      <View
+                        key={`related-skeleton-${index}`}
+                        style={styles.relatedCard}
+                      >
+                        <SkeletonBlock
+                          style={[
+                            styles.relatedPoster,
+                            styles.skeletonRelatedPoster,
+                          ]}
+                        />
+                        <SkeletonBlock style={styles.skeletonRelatedTitle} />
+                        <SkeletonBlock style={styles.skeletonRelatedDetail} />
+                      </View>
+                    ))
+                  : (data?.related ?? []).map((anime) => (
+                      <Pressable
+                        key={anime.id}
+                        onPress={() => openAnime(String(anime.id))}
+                        style={styles.relatedCard}
+                        accessibilityRole="button"
+                        accessibilityLabel={anime.title}
+                      >
+                        <PosterPlaceholder
+                          label={anime.title.slice(0, 2).toUpperCase()}
+                          source={anime.image}
+                          style={styles.relatedPoster}
+                        />
+                        <Text style={styles.relatedTitle} numberOfLines={1}>
+                          {anime.title}
+                        </Text>
+                        <Text style={styles.relatedDetail} numberOfLines={1}>
+                          {anime.detail}
+                        </Text>
+                      </Pressable>
+                    ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeading}>
+                <View>
+                  <Text style={styles.sectionTitle}>Episodes</Text>
+                  {isLoading ? (
+                    <SkeletonBlock style={styles.skeletonEpisodeCount} />
+                  ) : (
+                    <Text style={styles.sectionCaption}>
+                      {seasonLabel} · {totalEpisodeCount} episodes
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.viewToggle}>
                   <Pressable
-                    key={`${range.start}-${range.end}`}
-                    onPress={() => setSelectedRangeIndex(index)}
+                    onPress={() => setEpisodeView("list")}
                     style={[
-                      styles.rangeChip,
-                      selected && styles.rangeChipSelected,
+                      styles.viewToggleButton,
+                      episodeView === "list" && styles.viewToggleButtonSelected,
                     ]}
                     accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`Episodes ${range.start} to ${range.end}`}
+                    accessibilityLabel="List view"
+                    accessibilityState={{ selected: episodeView === "list" }}
                   >
                     <Text
                       style={[
-                        styles.rangeChipText,
-                        selected && styles.rangeChipTextSelected,
+                        styles.viewToggleGlyph,
+                        episodeView === "list" &&
+                          styles.viewToggleGlyphSelected,
                       ]}
                     >
-                      Ep {range.label}
+                      ☷
                     </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setEpisodeView("grid")}
+                    style={[
+                      styles.viewToggleButton,
+                      episodeView === "grid" && styles.viewToggleButtonSelected,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Grid view"
+                    accessibilityState={{ selected: episodeView === "grid" }}
+                  >
+                    <Text
+                      style={[
+                        styles.viewToggleGlyph,
+                        episodeView === "grid" &&
+                          styles.viewToggleGlyphSelected,
+                      ]}
+                    >
+                      ▦
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.seasonTabs}
+              >
+                {isLoading
+                  ? Array.from({ length: 2 }, (_, index) => (
+                      <SkeletonBlock
+                        key={`season-skeleton-${index}`}
+                        style={styles.skeletonSeasonTab}
+                      />
+                    ))
+                  : seasons.map((season) => {
+                      const selected = season.current;
+                      return (
+                        <Pressable
+                          key={season.id}
+                          onPress={() => selectSeason(season)}
+                          style={[
+                            styles.seasonTab,
+                            selected && styles.seasonTabSelected,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`Select ${season.label}`}
+                        >
+                          <Text
+                            style={[
+                              styles.seasonTabText,
+                              selected && styles.seasonTabTextSelected,
+                            ]}
+                          >
+                            {season.label}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.seasonTabCount,
+                              selected && styles.seasonTabCountSelected,
+                            ]}
+                          >
+                            {season.episodeCount} EP
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+              </ScrollView>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rangeList}
+              >
+                {isLoading
+                  ? Array.from({ length: 3 }, (_, index) => (
+                      <SkeletonBlock
+                        key={`range-skeleton-${index}`}
+                        style={styles.skeletonRangeChip}
+                      />
+                    ))
+                  : episodeRanges.map((range, index) => {
+                      const selected = index === safeRangeIndex;
+                      return (
+                        <Pressable
+                          key={`${range.start}-${range.end}`}
+                          onPress={() => selectEpisodeRange(range, index)}
+                          style={[
+                            styles.rangeChip,
+                            selected && styles.rangeChipSelected,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`Episodes ${range.start} to ${range.end}`}
+                        >
+                          <Text
+                            style={[
+                              styles.rangeChipText,
+                              selected && styles.rangeChipTextSelected,
+                            ]}
+                          >
+                            Ep {range.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+              </ScrollView>
+
+              <View
+                style={[
+                  styles.episodeList,
+                  episodeView === "grid" && styles.episodeGrid,
+                ]}
+              >
+                {isLoading
+                  ? Array.from(
+                      { length: episodeView === "grid" ? 4 : 3 },
+                      (_, index) => (
+                        <EpisodeSkeletonCard
+                          key={`episode-skeleton-${index}`}
+                          viewMode={episodeView}
+                        />
+                      ),
+                    )
+                  : visibleEpisodes.map((episode) => (
+                      <EpisodeCard
+                        key={episode.id}
+                        episode={episode}
+                        selected={episode.number === selectedEpisodeNumber}
+                        onPress={() => selectEpisode(episode)}
+                        viewMode={episodeView}
+                      />
+                    ))}
+              </View>
+            </View>
+
+            <View style={[styles.section, styles.lastSection]}>
+              <View style={styles.sectionHeading}>
+                <View>
+                  <Text style={styles.sectionTitle}>Voice cast</Text>
+                  <Text style={styles.sectionCaption}>Meet the characters</Text>
+                </View>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.castList}
+              >
+                {isLoading
+                  ? Array.from({ length: 4 }, (_, index) => (
+                      <View
+                        key={`cast-skeleton-${index}`}
+                        style={styles.castCard}
+                      >
+                        <SkeletonBlock
+                          style={[
+                            styles.castPortrait,
+                            styles.skeletonCastPortrait,
+                          ]}
+                        />
+                        <SkeletonBlock style={styles.skeletonCastName} />
+                        <SkeletonBlock style={styles.skeletonCastRole} />
+                      </View>
+                    ))
+                  : (data?.cast ?? []).map((member) => (
+                      <View key={member.id} style={styles.castCard}>
+                        <PosterPlaceholder
+                          label={member.name
+                            .split(" ")
+                            .map((part) => part[0])
+                            .join("")}
+                          source={member.image}
+                          style={styles.castPortrait}
+                        />
+                        <Text style={styles.castName} numberOfLines={1}>
+                          {member.name}
+                        </Text>
+                        <Text style={styles.castRole} numberOfLines={1}>
+                          {member.role}
+                        </Text>
+                        <Text style={styles.castVoiceActor} numberOfLines={1}>
+                          VA · {member.voiceActor}
+                        </Text>
+                      </View>
+                    ))}
+              </ScrollView>
+            </View>
+          </View>
+        </ScrollView>
+        <Modal
+          transparent
+          visible={isServerPickerVisible}
+          animationType="fade"
+          onRequestClose={() => setIsServerPickerVisible(false)}
+        >
+          <View style={styles.serverModalOverlay}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setIsServerPickerVisible(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close server selector"
+            />
+            <View style={styles.serverModalCard}>
+              <View style={styles.serverModalHeader}>
+                <View>
+                  <Text style={styles.serverModalTitle}>Choose a server</Text>
+                  <Text style={styles.serverModalCaption}>
+                    Switch playback source
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setIsServerPickerVisible(false)}
+                  style={styles.serverModalClose}
+                >
+                  <Text style={styles.serverModalCloseText}>×</Text>
+                </Pressable>
+              </View>
+              {PLAYER_SERVERS.map((server) => {
+                const selected = server.id === selectedServerId;
+                return (
+                  <Pressable
+                    key={server.id}
+                    onPress={() => {
+                      if(server.id === "s3"){
+                        ToastAndroid.showWithGravity("Server unavailable", ToastAndroid.TOP, ToastAndroid.SHORT);
+                        return;
+                      }
+                      setSelectedServerId(server.id);
+                      setIsServerPickerVisible(false);
+                    }}
+                    style={[
+                      styles.serverOption,
+                      selected && styles.serverOptionSelected,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                  >
+                    <View>
+                      <Text
+                        style={[
+                          styles.serverOptionName,
+                          selected && styles.serverOptionNameSelected,
+                        ]}
+                      >
+                        {server.label}
+                      </Text>
+                      <Text style={styles.serverOptionDetail}>
+                        {server.detail}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.serverRadio,
+                        selected && styles.serverRadioSelected,
+                      ]}
+                    >
+                      {selected && <View style={styles.serverRadioDot} />}
+                    </View>
                   </Pressable>
                 );
               })}
-            </ScrollView>
-
-            <View style={styles.episodeList}>
-              {visibleEpisodes.map((episode) => (
-                <EpisodeCard
-                  key={episode.id}
-                  episode={episode}
-                  selected={episode.id === selectedEpisodeId}
-                  onPress={() => selectEpisode(episode)}
-                />
-              ))}
             </View>
           </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeading}>
-              <View>
-                <Text style={styles.sectionTitle}>Voice cast</Text>
-                <Text style={styles.sectionCaption}>Meet the characters</Text>
-              </View>
-              <Pressable accessibilityRole="button">
-                <Text style={styles.sectionLink}>See all ›</Text>
-              </Pressable>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.castList}
-            >
-              {cast.map((member) => (
-                <View key={member.id} style={styles.castCard}>
-                  <PosterPlaceholder
-                    label={member.name
-                      .split(" ")
-                      .map((part) => part[0])
-                      .join("")}
-                    source={member.image}
-                    style={styles.castPortrait}
-                  />
-                  <Text style={styles.castName} numberOfLines={1}>
-                    {member.name}
-                  </Text>
-                  <Text style={styles.castRole} numberOfLines={1}>
-                    {member.role}
-                  </Text>
-                  <Text style={styles.castVoiceActor} numberOfLines={1}>
-                    VA · {member.voiceActor}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={[styles.section, styles.lastSection]}>
-            <View style={styles.sectionHeading}>
-              <View>
-                <Text style={styles.sectionTitle}>You might also like</Text>
-                <Text style={styles.sectionCaption}>
-                  More worlds to explore
-                </Text>
-              </View>
-              <Pressable accessibilityRole="button">
-                <Text style={styles.sectionLink}>See all ›</Text>
-              </Pressable>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.relatedList}
-            >
-              {relatedAnime.map((anime) => (
-                <Pressable
-                  key={anime.id}
-                  style={styles.relatedCard}
-                  accessibilityRole="button"
-                  accessibilityLabel={anime.title}
-                >
-                  <PosterPlaceholder
-                    label={anime.title.slice(0, 2).toUpperCase()}
-                    source={anime.image}
-                    style={styles.relatedPoster}
-                  />
-                  <Text style={styles.relatedTitle} numberOfLines={1}>
-                    {anime.title}
-                  </Text>
-                  <Text style={styles.relatedDetail} numberOfLines={1}>
-                    {anime.detail}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </ScrollView>
+        </Modal>
+      </View>
     </SafeAreaView>
   );
 }
@@ -1050,7 +1115,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 5,
   },
-  metadataRow: { flexDirection: "row", alignItems: "center", marginTop: 10 },
+  metadataRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 10,
+  },
   metaChip: { color: COLORS.muted, fontSize: 9, fontWeight: "600" },
   metaSeparator: { color: "#595B6E", fontSize: 10, marginHorizontal: 7 },
   actionRow: {
@@ -1111,18 +1181,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 1,
   },
-  seasonList: { paddingRight: 8 },
-  seasonCard: {
-    width: 145,
-    height: 78,
-    marginRight: 10,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surfaceRaised,
-  },
-  seasonCardSelected: { borderColor: "rgba(167,139,250,0.7)" },
   posterPlaceholder: {
     flex: 1,
     backgroundColor: "#202236",
@@ -1156,8 +1214,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(8,9,16,0.38)",
   },
-  seasonCardCopy: { position: "absolute", left: 10, bottom: 9 },
-  seasonCardLabel: { color: COLORS.white, fontSize: 11, fontWeight: "800" },
   seasonCardMeta: {
     color: "rgba(255,255,255,0.68)",
     fontSize: 8,
@@ -1174,16 +1230,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  seasonSelectedCheck: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
-  sortButton: {
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderRadius: 9,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  sortButtonText: { color: "#C3C2D0", fontSize: 8, fontWeight: "600" },
   rangeList: { paddingRight: 8, marginBottom: 13 },
   rangeChip: {
     paddingHorizontal: 12,
@@ -1305,4 +1351,298 @@ const styles = StyleSheet.create({
   relatedTitle: { color: COLORS.white, fontSize: 10, fontWeight: "700" },
   relatedDetail: { color: COLORS.muted, fontSize: 8, marginTop: 4 },
   lastSection: { marginBottom: 8 },
+
+  animeFrameContainer: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    overflow: "hidden",
+    backgroundColor: "#000000",
+  },
+  stickyHeader: {
+    flexShrink: 0,
+    backgroundColor: COLORS.background,
+    zIndex: 2,
+    elevation: 5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  scrollArea: { flex: 1 },
+  pinnedDetails: { paddingHorizontal: 20, paddingBottom: 12 },
+  seasonTabs: { paddingRight: 8, paddingBottom: 10 },
+  seasonTab: {
+    minWidth: 102,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  seasonTabSelected: {
+    backgroundColor: "rgba(167,139,250,0.14)",
+    borderColor: "rgba(167,139,250,0.42)",
+  },
+  seasonTabText: { color: "#AAAABC", fontSize: 9, fontWeight: "700" },
+  seasonTabTextSelected: { color: "#E1D8FF" },
+  seasonTabCount: { color: COLORS.muted, fontSize: 7, marginTop: 4 },
+  seasonTabCountSelected: { color: "#BEB0F6" },
+  viewToggle: {
+    flexDirection: "row",
+    padding: 3,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  viewToggleButton: {
+    width: 30,
+    height: 27,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewToggleButtonSelected: { backgroundColor: "rgba(167,139,250,0.2)" },
+  viewToggleGlyph: { color: COLORS.muted, fontSize: 17, lineHeight: 20 },
+  viewToggleGlyphSelected: { color: "#D8CEFF" },
+  episodeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  episodeCardGrid: {
+    width: "48.5%",
+    minHeight: 0,
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  episodeImageWrapGrid: { width: "100%", height: 105 },
+  episodeInfoGrid: { flex: 0, marginLeft: 0, marginRight: 0, marginTop: 9 },
+
+  // Metadata chips, expandable synopsis, and loading skeletons.
+  genreChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginRight: 6,
+    marginBottom: 4,
+    borderRadius: 9,
+    backgroundColor: "rgba(167,139,250,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.16)",
+  },
+  genreChipText: { color: "#D8CEFF", fontSize: 8, fontWeight: "700" },
+  metadataTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginRight: 6,
+    marginBottom: 4,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  metadataTagText: { color: "#C7C7D3", fontSize: 8, fontWeight: "700" },
+  metadataQualityChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    marginRight: 6,
+    marginBottom: 4,
+    borderRadius: 7,
+    backgroundColor: "rgba(131,231,244,0.1)",
+  },
+  metadataQualityText: {
+    color: COLORS.cyan,
+    fontSize: 7,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  skeletonBlock: {
+    backgroundColor: "#252738",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.035)",
+  },
+  skeletonCurrentEpisode: { width: 88, height: 8, borderRadius: 4 },
+  skeletonTitle: { width: "62%", height: 27, borderRadius: 8 },
+  skeletonEpisodeCount: {
+    width: 110,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 5,
+  },
+  skeletonEpisodeSubtitle: {
+    width: "78%",
+    height: 12,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  skeletonMetaTag: { width: 39, height: 20, borderRadius: 8, marginRight: 6 },
+  skeletonMetaTagWide: {
+    width: 67,
+    height: 20,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  synopsisSkeleton: { marginTop: 1 },
+  skeletonSynopsisLine: {
+    width: "100%",
+    height: 9,
+    borderRadius: 5,
+    marginBottom: 8,
+  },
+  skeletonSynopsisLineShort: { width: "64%", height: 9, borderRadius: 5 },
+  skeletonRelatedPoster: { backgroundColor: "#202236" },
+  skeletonRelatedTitle: {
+    width: "78%",
+    height: 9,
+    borderRadius: 5,
+    marginBottom: 6,
+  },
+  skeletonRelatedDetail: { width: "58%", height: 7, borderRadius: 4 },
+  skeletonSeasonTab: {
+    width: 102,
+    height: 47,
+    borderRadius: 11,
+    marginRight: 8,
+  },
+  skeletonRangeChip: {
+    width: 78,
+    height: 32,
+    borderRadius: 10,
+    marginRight: 7,
+  },
+  skeletonEpisodeCard: { borderColor: "rgba(255,255,255,0.04)" },
+  skeletonEpisodeImage: { backgroundColor: "#202236" },
+  skeletonEpisodeTitle: {
+    width: "76%",
+    height: 9,
+    borderRadius: 5,
+    marginBottom: 9,
+  },
+  skeletonEpisodeDescription: { width: "92%", height: 8, borderRadius: 5 },
+  skeletonCastPortrait: { backgroundColor: "#202236" },
+  skeletonCastName: { width: 62, height: 8, borderRadius: 4, marginTop: 8 },
+  skeletonCastRole: { width: 46, height: 6, borderRadius: 4, marginTop: 5 },
+
+  playbackOptionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  audioControlGroup: { flexDirection: "row", alignItems: "center" },
+  playbackOptionLabel: {
+    color: COLORS.muted,
+    fontSize: 7,
+    fontWeight: "900",
+    letterSpacing: 1,
+    marginRight: 8,
+  },
+  audioToggle: {
+    flexDirection: "row",
+    padding: 3,
+    borderRadius: 9,
+    backgroundColor: "rgba(0,0,0,0.22)",
+  },
+  audioToggleButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 7,
+  },
+  audioToggleButtonSelected: { backgroundColor: "rgba(167,139,250,0.22)" },
+  audioToggleText: {
+    color: COLORS.muted,
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  audioToggleTextSelected: { color: "#E0D7FF" },
+  serverSelector: {
+    minWidth: 124,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  serverSelectedName: {
+    color: COLORS.white,
+    fontSize: 9,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  serverChevron: { color: COLORS.muted, fontSize: 15, marginLeft: 8 },
+  serverModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.68)",
+    padding: 14,
+  },
+  serverModalCard: {
+    padding: 16,
+    paddingBottom: 22,
+    borderRadius: 22,
+    backgroundColor: "#151726",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  serverModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  serverModalTitle: { color: COLORS.white, fontSize: 16, fontWeight: "800" },
+  serverModalCaption: { color: COLORS.muted, fontSize: 9, marginTop: 4 },
+  serverModalClose: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  serverModalCloseText: { color: COLORS.white, fontSize: 21, lineHeight: 24 },
+  serverOption: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 11,
+    marginTop: 7,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+  },
+  serverOptionSelected: {
+    backgroundColor: "rgba(167,139,250,0.1)",
+    borderColor: "rgba(167,139,250,0.42)",
+  },
+  serverOptionName: { color: "#E1E0EA", fontSize: 10, fontWeight: "700" },
+  serverOptionNameSelected: { color: "#E1D8FF" },
+  serverOptionDetail: { color: COLORS.muted, fontSize: 8, marginTop: 4 },
+  serverRadio: {
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#66687A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  serverRadioSelected: { borderColor: COLORS.purple },
+  serverRadioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.purple,
+  },
+  unloadedEpisodeDescription: { color: "#8E91A5" },
 });
