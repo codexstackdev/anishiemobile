@@ -4,7 +4,7 @@
     "slug": "anishie",
     "version": "0.1",
     "orientation": "portrait",
-    "icon": "./assets/icon.jpg",
+    "icon": "./assets/icon.png",
     "scheme": "anishie",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -13,9 +13,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/icon.jpg",
-        "backgroundImage": "./assets/icon.jpg",
-        "monochromeImage": "./assets/icon.jpg"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundImage": "./assets/icon.png",
+        "monochromeImage": "./assets/icon.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.kenshie.anishie"
@@ -30,7 +30,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#090A12",
-          "image": "./assets/icon.jpg",
+          "image": "./assets/icon.png",
           "imageWidth": 76
         }
       ]
