@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import {
   Image,
   LayoutChangeEvent,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -19,6 +20,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View,
   Dimensions,
   ToastAndroid,
@@ -164,6 +166,14 @@ function RecentCard({ item }: RecentCardProps) {
     <Pressable
       style={styles.recentCard}
       accessibilityRole="button"
+      onPress={() => {
+        router.push({
+          pathname: `/watch/${item.id}` as any,
+          params: {
+            ep: item.episode.replace("Episode", "")
+          }
+        })
+      }}
       accessibilityLabel={`${item.title}, ${item.episode}`}
     >
       <AnimeImage source={item.image} style={styles.recentImage} />
@@ -252,6 +262,10 @@ export default function Index() {
   const [data, setData] = useState<Awaited<
     ReturnType<typeof fetchHomeData>
   > | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
+  const searchSuggestions = ["Solo Leveling", "One Piece", "Demon Slayer", "Frieren"];
 
   useEffect(() => {
     const getData = async () => {
@@ -310,9 +324,13 @@ export default function Index() {
             </View>
             <View style={styles.topActions}>
               <Pressable
+                onPress={() => {
+                  setSearchQuery("");
+                  setIsSearchOpen(true);
+                }}
                 style={styles.iconButton}
                 accessibilityRole="button"
-                accessibilityLabel="Search"
+                accessibilityLabel="Open search"
               >
                 <Text style={styles.searchGlyph}>⌕</Text>
               </Pressable>
@@ -321,7 +339,7 @@ export default function Index() {
                 accessibilityRole="button"
                 accessibilityLabel="Profile"
               >
-                <Text style={styles.avatarText}>Y</Text>
+                <Text style={styles.avatarText}>K</Text>
               </Pressable>
             </View>
           </View>
@@ -396,7 +414,7 @@ export default function Index() {
           </View>
 
           <View style={styles.sectionBlock}>
-            <SectionHeading title="Recent episodes" action="View all" />
+            <SectionHeading title="Recent episodes" action="na" />
             <View style={styles.recentList}>
               {data
                 ? data.recent.map((item) => (
@@ -408,6 +426,131 @@ export default function Index() {
             </View>
           </View>
         </ScrollView>
+        <Modal
+          visible={isSearchOpen}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setIsSearchOpen(false)}
+        >
+          <SafeAreaView style={styles.searchScreen}>
+            <View style={styles.searchHeader}>
+              <Pressable
+                onPress={() => setIsSearchOpen(false)}
+                style={styles.searchBackButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close search"
+              >
+                <Text style={styles.searchBackGlyph}>‹</Text>
+              </Pressable>
+              <Text style={styles.searchScreenTitle}>Search anime</Text>
+              <View style={styles.searchHeaderSpacer} />
+            </View>
+
+            <View style={styles.searchInputShell}>
+              <Text style={styles.searchInputGlyph}>⌕</Text>
+              <TextInput
+                autoFocus
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search Animes..."
+                placeholderTextColor="#77798C"
+                style={styles.searchScreenInput}
+                onSubmitEditing={() => {
+                  router.push({
+                    pathname: "/Discover",
+                    params: { searchQuery }
+                  })
+                }}
+                returnKeyType="search"
+                accessibilityLabel="Search anime titles"
+              />
+              {searchQuery.length > 0 && (
+                <Pressable
+                  onPress={() => setSearchQuery("")}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search text"
+                >
+                  <Text style={styles.searchClearGlyph}>×</Text>
+                </Pressable>
+              )}
+            </View>
+
+            <ScrollView
+              style={styles.searchResultsScroll}
+              contentContainerStyle={styles.searchResultsContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.searchSectionHeading}>
+                <View>
+                  <Text style={styles.searchEyebrow}>
+                    {searchQuery.trim() ? "YOUR SEARCH" : "QUICK DISCOVERY"}
+                  </Text>
+                  <Text style={styles.searchSectionTitle}>
+                    {searchQuery.trim() ? "Ready to search" : "Popular searches"}
+                  </Text>
+                </View>
+                <View style={styles.searchSparkleBadge}>
+                  <Text style={styles.searchSparkle}>✦</Text>
+                </View>
+              </View>
+
+              {searchQuery.trim() ? (
+                <View style={styles.searchQueryPreview}>
+                  <View style={styles.searchQueryIcon}>
+                    <Text style={styles.searchInputGlyph}>⌕</Text>
+                  </View>
+                  <View style={styles.searchQueryCopy}>
+                    <Text style={styles.searchQueryLabel}>Search for</Text>
+                    <Text style={styles.searchQueryValue} numberOfLines={1}>
+                      “{searchQuery.trim()}”
+                    </Text>
+                  </View>
+                  <Text style={styles.searchQueryArrow}>›</Text>
+                </View>
+              ) : (
+                <View style={styles.searchSuggestionWrap}>
+                  {searchSuggestions.map((suggestion, index) => (
+                    <Pressable
+                      key={suggestion}
+                      onPress={() => setSearchQuery(suggestion)}
+                      style={styles.searchSuggestionChip}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Search ${suggestion}`}
+                    >
+                      <Text style={styles.searchSuggestionNumber}>
+                        {String(index + 1).padStart(2, "0")}
+                      </Text>
+                      <Text style={styles.searchSuggestionText}>{suggestion}</Text>
+                      <Text style={styles.searchSuggestionArrow}>↗</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <View style={styles.searchBrowseCard}>
+                <View style={styles.searchBrowseGlow} />
+                <View style={styles.searchBrowseIcon}>
+                  <Text style={styles.searchBrowseIconText}>✧</Text>
+                </View>
+                <View style={styles.searchBrowseCopy}>
+                  <Text style={styles.searchBrowseTitle}>Not sure what to watch?</Text>
+                  <Text style={styles.searchBrowseCaption}>
+                    Explore anime by mood, genre, or world.
+                  </Text>
+                </View>
+                <Text style={styles.searchBrowseArrow}>›</Text>
+              </View>
+
+              <View style={styles.searchTipRow}>
+                <View style={styles.searchTipLine} />
+                <Text style={styles.searchTipText}>YOUR NEXT STORY IS OUT THERE</Text>
+                <View style={styles.searchTipLine} />
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -862,4 +1005,105 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginHorizontal: 5,
   },
+
+  searchScreen: { flex: 1, backgroundColor: COLORS.background },
+  searchHeader: {
+    height: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+  },
+  searchBackButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  searchBackGlyph: { color: COLORS.white, fontSize: 30, lineHeight: 33, fontWeight: "300", marginTop: -3 },
+  searchScreenTitle: { color: COLORS.white, fontSize: 14, fontWeight: "800", letterSpacing: -0.2 },
+  searchHeaderSpacer: { width: 36, height: 36 },
+  searchInputShell: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: "#151622",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.42)",
+    shadowColor: COLORS.violet,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  searchInputGlyph: { color: COLORS.purple, fontSize: 27, lineHeight: 30, transform: [{ rotate: "-20deg" }] },
+  searchScreenInput: { flex: 1, color: COLORS.white, fontSize: 12, paddingVertical: 12, marginLeft: 10 },
+  searchClearGlyph: { color: COLORS.muted, fontSize: 24, lineHeight: 27, paddingLeft: 8 },
+  searchResultsScroll: { flex: 1, marginTop: 28 },
+  searchResultsContent: { paddingHorizontal: 20, paddingBottom: 30 },
+  searchSectionHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 15 },
+  searchEyebrow: { color: COLORS.purple, fontSize: 8, fontWeight: "900", letterSpacing: 1.5, marginBottom: 5 },
+  searchSectionTitle: { color: COLORS.white, fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
+  searchSparkleBadge: { width: 37, height: 37, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(167,139,250,0.1)", borderWidth: 1, borderColor: "rgba(167,139,250,0.17)" },
+  searchSparkle: { color: "#D8CEFF", fontSize: 18 },
+  searchSuggestionWrap: { flexDirection: "row", flexWrap: "wrap", marginRight: -7 },
+  searchSuggestionChip: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 11,
+    marginRight: 7,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+  },
+  searchSuggestionNumber: { color: "#74768A", fontSize: 7, fontWeight: "900", marginRight: 7 },
+  searchSuggestionText: { color: "#E5E3EF", fontSize: 9, fontWeight: "700" },
+  searchSuggestionArrow: { color: COLORS.purple, fontSize: 11, marginLeft: 8 },
+  searchQueryPreview: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: "rgba(167,139,250,0.075)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.19)",
+  },
+  searchQueryIcon: { width: 37, height: 37, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(167,139,250,0.12)" },
+  searchQueryCopy: { flex: 1, marginLeft: 11 },
+  searchQueryLabel: { color: COLORS.muted, fontSize: 8, fontWeight: "600" },
+  searchQueryValue: { color: COLORS.white, fontSize: 12, fontWeight: "800", marginTop: 3 },
+  searchQueryArrow: { color: "#D8CEFF", fontSize: 24, fontWeight: "300", marginLeft: 6 },
+  searchBrowseCard: {
+    minHeight: 90,
+    flexDirection: "row",
+    alignItems: "center",
+    overflow: "hidden",
+    paddingHorizontal: 13,
+    marginTop: 26,
+    borderRadius: 17,
+    backgroundColor: "#151522",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.075)",
+  },
+  searchBrowseGlow: { position: "absolute", right: -28, top: -41, width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(124,92,252,0.13)" },
+  searchBrowseIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(167,139,250,0.14)" },
+  searchBrowseIconText: { color: "#D7CCFF", fontSize: 23 },
+  searchBrowseCopy: { flex: 1, marginLeft: 11 },
+  searchBrowseTitle: { color: COLORS.white, fontSize: 10, fontWeight: "800" },
+  searchBrowseCaption: { color: COLORS.muted, fontSize: 8, marginTop: 5 },
+  searchBrowseArrow: { color: COLORS.purple, fontSize: 22, marginLeft: 6 },
+  searchTipRow: { flexDirection: "row", alignItems: "center", marginTop: 31 },
+  searchTipLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.1)" },
+  searchTipText: { color: "#656779", fontSize: 6, fontWeight: "800", letterSpacing: 1.1, marginHorizontal: 10 },
 });

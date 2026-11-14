@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
-  ImageSourcePropType,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   SafeAreaView,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -13,35 +14,14 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
-type DiscoveryCategory = "For You" | "Trending" | "Top Rated" | "New";
-type AnimeGenre =
-  | "Action"
-  | "Adventure"
-  | "Fantasy"
-  | "Romance"
-  | "Sci-Fi"
-  | "Drama"
-  | "Comedy"
-  | "Mystery";
-
-type Anime = {
-  id: string;
-  title: string;
-  japaneseTitle?: string;
-  synopsis: string;
-  year: number;
-  rating: number;
-  episodeCount: number;
-  status: "Airing" | "Complete" | "Upcoming";
-  genres: AnimeGenre[];
-  accent: string;
-  image?: ImageSourcePropType;
-  featured?: boolean;
-  trending?: boolean;
-  topRated?: boolean;
-  isNew?: boolean;
-};
+import { router, useLocalSearchParams } from "expo-router";
+import { AnimeDisc, AnimeGenre, DiscoveryCategory } from "@/hooks/types";
+import {
+  fetchFeatured,
+  useDebounced,
+  useDiscoverList,
+} from "@/hooks/discoveryActions";
+import { NavigationBar } from "expo-navigation-bar";
 
 const COLORS = {
   background: "#09090B",
@@ -74,161 +54,11 @@ const GENRES: Array<"All" | AnimeGenre> = [
   "Mystery",
 ];
 
-const ANIME: Anime[] = [
-  {
-    id: "solo-leveling",
-    title: "Solo Leveling",
-    japaneseTitle: "Ore dake Level Up na Ken",
-    synopsis:
-      "A low-ranked hunter discovers a mysterious system that lets him grow stronger without limits.",
-    year: 2024,
-    rating: 9.1,
-    episodeCount: 12,
-    status: "Complete",
-    genres: ["Action", "Fantasy", "Adventure"],
-    accent: "#57305F",
-    featured: true,
-    trending: true,
-    topRated: true,
-  },
-  {
-    id: "frieren",
-    title: "Frieren: Beyond Journey's End",
-    japaneseTitle: "Sousou no Frieren",
-    synopsis:
-      "An elf mage begins a quiet new journey after the defeat of the Demon King.",
-    year: 2023,
-    rating: 9.8,
-    episodeCount: 28,
-    status: "Complete",
-    genres: ["Adventure", "Fantasy", "Drama"],
-    accent: "#315B64",
-    featured: true,
-    topRated: true,
-  },
-  {
-    id: "jujutsu-kaisen",
-    title: "Jujutsu Kaisen",
-    japaneseTitle: "呪術廻戦",
-    synopsis:
-      "Yuji Itadori enters a hidden world of curses after swallowing a powerful cursed .",
-    year: 2020,
-    rating: 8.7,
-    episodeCount: 47,
-    status: "Complete",
-    genres: ["Action", "Fantasy", "Drama"],
-    accent: "#3D355F",
-    trending: true,
-    isNew: true,
-  },
-  {
-    id: "one-piece",
-    title: "One Piece",
-    japaneseTitle: "ワンピース",
-    synopsis:
-      "Monkey D. Luffy and his crew sail the Grand Line in search of the world's greatest treasure.",
-    year: 1999,
-    rating: 9.0,
-    episodeCount: 1100,
-    status: "Airing",
-    genres: ["Action", "Adventure", "Comedy"],
-    accent: "#6A492D",
-    trending: true,
-    topRated: true,
-  },
-  {
-    id: "apothecary-diaries",
-    title: "The Apothecary Diaries",
-    japaneseTitle: "Kusuriya no Hitorigoto",
-    synopsis:
-      "A sharp-witted young apothecary solves palace mysteries using her knowledge of medicine.",
-    year: 2023,
-    rating: 9.0,
-    episodeCount: 24,
-    status: "Complete",
-    genres: ["Mystery", "Drama", "Romance"],
-    accent: "#67404A",
-    topRated: true,
-    isNew: true,
-  },
-  {
-    id: "spy-family",
-    title: "SPY x FAMILY",
-    japaneseTitle: "スパイファミリー",
-    synopsis:
-      "A spy, an assassin, and a telepath build an unusual family for a secret mission.",
-    year: 2022,
-    rating: 8.5,
-    episodeCount: 37,
-    status: "Airing",
-    genres: ["Comedy", "Action", "Drama"],
-    accent: "#526245",
-    trending: true,
-  },
-  {
-    id: "your-name",
-    title: "Your Name.",
-    japaneseTitle: "Kimi no Na wa",
-    synopsis:
-      "Two teenagers mysteriously begin switching bodies across time and distance.",
-    year: 2016,
-    rating: 8.8,
-    episodeCount: 1,
-    status: "Complete",
-    genres: ["Romance", "Drama", "Fantasy"],
-    accent: "#574367",
-    topRated: true,
-  },
-  {
-    id: "kaiju-no-8",
-    title: "Kaiju No. 8",
-    japaneseTitle: "怪獣8号",
-    synopsis:
-      "A cleanup worker gains the power to transform into the very monsters he has fought for years.",
-    year: 2024,
-    rating: 8.4,
-    episodeCount: 12,
-    status: "Complete",
-    genres: ["Action", "Sci-Fi", "Adventure"],
-    accent: "#34545A",
-    isNew: true,
-  },
-  {
-    id: "blue-lock",
-    title: "Blue Lock",
-    japaneseTitle: "ブルーロック",
-    synopsis:
-      "Strikers compete in an intense program designed to create the world's greatest egoist forward.",
-    year: 2022,
-    rating: 8.2,
-    episodeCount: 24,
-    status: "Complete",
-    genres: ["Drama", "Action"],
-    accent: "#315075",
-    trending: true,
-  },
-  {
-    id: "dandadan",
-    title: "DAN DA DAN",
-    japaneseTitle: "ダンダダン",
-    synopsis:
-      "A paranormal wager pulls two teenagers into a wild collision of aliens and spirits.",
-    year: 2024,
-    rating: 8.6,
-    episodeCount: 12,
-    status: "Complete",
-    genres: ["Action", "Comedy", "Mystery"],
-    accent: "#75414D",
-    trending: true,
-    isNew: true,
-  },
-];
-
 function PosterArtwork({
   anime,
   compact = false,
 }: {
-  anime: Anime;
+  anime: AnimeDisc;
   compact?: boolean;
 }) {
   return (
@@ -306,44 +136,33 @@ function GenreChip({
 
 export default function Discover() {
   const { width: windowWidth } = useWindowDimensions();
-  const [query, setQuery] = useState<string>("");
+  const params = useLocalSearchParams<{ searchQuery: string }>();
+  const [query, setQuery] = useState<string>(params.searchQuery ?? "");
   const [category, setCategory] = useState<DiscoveryCategory>("For You");
   const [selectedGenre, setSelectedGenre] = useState<"All" | AnimeGenre>("All");
   const [savedAnimeIds, setSavedAnimeIds] = useState<string[]>([]);
   const [activeFeatureIndex, setActiveFeatureIndex] = useState<number>(0);
+  const [featuredAnime, setFeaturedAnime] = useState<AnimeDisc[]>([]);
+
+  const debouncedQuery = useDebounced(query);
+
+  const { items, loading, loadingMore, hasNext, loadMore } = useDiscoverList(
+    debouncedQuery.trim(),
+    category,
+    selectedGenre,
+  );
+
+  useEffect(() => {
+    fetchFeatured().then(setFeaturedAnime).catch(console.log);
+  }, []);
 
   const horizontalPadding = 20;
   const gridGap = 12;
   const cardWidth = (windowWidth - horizontalPadding * 2 - gridGap) / 2;
-  const featuredAnime = useMemo(
-    () => ANIME.filter((anime) => anime.featured),
-    [],
-  );
 
-  const filteredAnime = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return ANIME.filter((anime) => {
-      const matchesQuery =
-        normalizedQuery.length === 0 ||
-        anime.title.toLowerCase().includes(normalizedQuery) ||
-        anime.japaneseTitle?.toLowerCase().includes(normalizedQuery) ||
-        anime.genres.some((genre) =>
-          genre.toLowerCase().includes(normalizedQuery),
-        );
-
-      const matchesGenre =
-        selectedGenre === "All" || anime.genres.includes(selectedGenre);
-
-      const matchesCategory =
-        category === "For You" ||
-        (category === "Trending" && anime.trending) ||
-        (category === "Top Rated" && anime.topRated) ||
-        (category === "New" && anime.isNew);
-
-      return matchesQuery && matchesGenre && matchesCategory;
-    });
-  }, [category, query, selectedGenre]);
+  const openAnime = (animeId: string) => {
+    router.push(`../watch/${animeId}`);
+  };
 
   const toggleSaved = (animeId: string) => {
     setSavedAnimeIds((current) =>
@@ -363,6 +182,23 @@ export default function Discover() {
     );
   };
 
+  const onMainScroll = ({
+    nativeEvent,
+  }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 600) {
+      loadMore();
+    }
+  };
+
+  const handleSearchChange = (text: string) => {
+  if (query.length === 0 && text.length > 0) {
+    setCategory("For You");
+    setSelectedGenre("All");
+  }
+  setQuery(text);
+};
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -370,7 +206,10 @@ export default function Discover() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onScroll={onMainScroll}
+        scrollEventThrottle={200}
       >
+        <NavigationBar hidden={true}/>
         <View style={styles.header}>
           <View style={styles.brandLine}>
             <View style={styles.brandLockup}>
@@ -384,7 +223,7 @@ export default function Discover() {
             </View>
             <View style={styles.headerRight}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>A</Text>
+                <Text style={styles.avatarText}>K</Text>
               </View>
             </View>
           </View>
@@ -411,7 +250,7 @@ export default function Discover() {
           <Ionicons name="search" size={18} color={COLORS.mutedForeground} />
           <TextInput
             value={query}
-            onChangeText={setQuery}
+            onChangeText={handleSearchChange}
             placeholder="Search anime, genres, or moods"
             placeholderTextColor="#71717A"
             style={styles.searchInput}
@@ -473,7 +312,8 @@ export default function Discover() {
 
         {category === "For You" &&
           query.length === 0 &&
-          selectedGenre === "All" && (
+          selectedGenre === "All" &&
+          featuredAnime.length > 0 && (
             <View style={styles.featureSection}>
               <View style={styles.sectionHeading}>
                 <View>
@@ -562,6 +402,7 @@ export default function Discover() {
                           ))}
                         </View>
                         <Pressable
+                          onPress={() => openAnime(anime.id)}
                           style={styles.featurePlayButton}
                           accessibilityRole="button"
                           accessibilityLabel={`View ${anime.title}`}
@@ -637,12 +478,18 @@ export default function Discover() {
             </View>
             <View style={styles.resultCount}>
               <Text style={styles.resultCountText}>
-                {filteredAnime.length} TITLES
+                {items.length}
+                {hasNext ? "+" : ""} TITLES
               </Text>
             </View>
           </View>
 
-          {filteredAnime.length === 0 ? (
+          {loading ? (
+            <ActivityIndicator
+              color={COLORS.primary}
+              style={{ paddingVertical: 40 }}
+            />
+          ) : items.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
                 <Ionicons
@@ -669,14 +516,12 @@ export default function Discover() {
             </View>
           ) : (
             <View style={styles.animeGrid}>
-              {filteredAnime.map((anime, index) => {
+              {items.map((anime, index) => {
                 const saved = savedAnimeIds.includes(anime.id);
                 return (
                   <Pressable
                     key={anime.id}
-                    onPress={() => {
-                      /* Connect to your Watch route here, e.g. router.push({ pathname: "/Watch", params: { id: anime.id } }). */
-                    }}
+                    onPress={() => openAnime(anime.id)}
                     style={[
                       styles.animeCard,
                       { width: cardWidth },
@@ -757,14 +602,27 @@ export default function Discover() {
               })}
             </View>
           )}
+
+          {loadingMore && (
+            <ActivityIndicator
+              color={COLORS.primary}
+              style={{ paddingVertical: 20 }}
+            />
+          )}
         </View>
 
-        <View style={styles.bottomNote}>
-          <Ionicons name="sparkles-outline" size={13} color={COLORS.primary} />
-          <Text style={styles.bottomNoteText}>
-            A new story is always waiting.
-          </Text>
-        </View>
+        {!hasNext && !loading && items.length > 0 && (
+          <View style={styles.bottomNote}>
+            <Ionicons
+              name="sparkles-outline"
+              size={13}
+              color={COLORS.primary}
+            />
+            <Text style={styles.bottomNoteText}>
+              A new story is always waiting.
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

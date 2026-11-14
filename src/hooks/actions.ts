@@ -132,7 +132,7 @@ export async function fetchHomeData(): Promise<{
     .slice(0, 8)
     .map((s: any) => ({
       title: getTitle(s.media.title),
-      id: s.id,
+      id: String(s.media.id),
       image: { uri: s.media.coverImage.extraLarge },
       episode: `Episode ${s.episode}`,
       release: timeAgo(s.airingAt),

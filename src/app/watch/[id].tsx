@@ -197,12 +197,17 @@ type Season = AnimeDetails["seasons"][number];
 
 export default function Watch() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
-  const [selectedSeasonId, setSelectedSeasonId] = useState<string>("season-1");
+  const { id, ep } = useLocalSearchParams();
   const [selectedEpisodeId, setSelectedEpisodeId] =
     useState<string>("unloaded-episode-1");
-  const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState<number>(1);
-  const [selectedRangeIndex, setSelectedRangeIndex] = useState<number>(0);
+  const epParam = Number(Array.isArray(ep) ? ep[0] : ep);
+  const initialEp = Number.isFinite(epParam) && epParam > 0 ? epParam : 1;
+
+  const [selectedEpisodeNumber, setSelectedEpisodeNumber] =
+    useState<number>(initialEp);
+  const [selectedRangeIndex, setSelectedRangeIndex] = useState<number>(
+    Math.floor((initialEp - 1) / RANGE_SIZE),
+  );
   const [audioMode, setAudioMode] = useState<AudioMode>("sub");
   const [selectedServerId, setSelectedServerId] = useState<string>("s1");
   const [isServerPickerVisible, setIsServerPickerVisible] =
@@ -214,30 +219,22 @@ export default function Watch() {
 
   useEffect(() => {
     let isActive = true;
+
     setIsLoading(true);
     setData(null);
     setIsSynopsisExpanded(false);
-    setSelectedRangeIndex(0);
-    setSelectedEpisodeNumber(1);
-    setSelectedEpisodeId("unloaded-episode-1");
+
     const getData = async () => {
       try {
         const result = await fetchAnimeDetails(Number(id));
         if (!isActive) return;
         if (result) {
           setData(result);
-          const firstEpisode = result.episodes.find(
-            (episode) => Number(episode.number) === 1,
-          );
-          const initialEpisode = firstEpisode ?? createUnloadedEpisode(1);
-          setSelectedEpisodeId(initialEpisode.id);
-          setSelectedEpisodeNumber(1);
-          setSelectedRangeIndex(0);
         } else {
           ToastAndroid.showWithGravity(
             "Something went wrong",
-            ToastAndroid.TOP,
             ToastAndroid.SHORT,
+            ToastAndroid.TOP,
           );
         }
       } catch (error) {
@@ -252,6 +249,12 @@ export default function Watch() {
       isActive = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    setSelectedEpisodeNumber(initialEp);
+    setSelectedEpisodeId(`ep-${initialEp}`);
+    setSelectedRangeIndex(Math.floor((initialEp - 1) / RANGE_SIZE));
+  }, [id, initialEp]);
 
   const episodes = data?.episodes ?? [];
   const seasons = data?.seasons ?? [];
@@ -312,11 +315,6 @@ export default function Watch() {
       ? `${synopsis.slice(0, 170).trimEnd()}…`
       : synopsis;
 
-  const selectSeason = (season: Season) => {
-    if (season.current) return;
-    router.setParams({ id: String(season.id) });
-  };
-
   const openAnime = (animeId: string) => {
     router.setParams({ id: animeId });
   };
@@ -361,7 +359,12 @@ export default function Watch() {
           </View>
 
           <View style={styles.animeFrameContainer}>
-            <AnimeFrame id={String(id)} audio={audioMode} episode={selectedEpisodeNumber} server={selectedServerId} />
+            <AnimeFrame
+              id={String(id)}
+              audio={audioMode}
+              episode={selectedEpisodeNumber}
+              server={selectedServerId}
+            />
           </View>
 
           <View style={styles.pinnedDetails}>
@@ -652,53 +655,6 @@ export default function Watch() {
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.seasonTabs}
-              >
-                {isLoading
-                  ? Array.from({ length: 2 }, (_, index) => (
-                      <SkeletonBlock
-                        key={`season-skeleton-${index}`}
-                        style={styles.skeletonSeasonTab}
-                      />
-                    ))
-                  : seasons.map((season) => {
-                      const selected = season.current;
-                      return (
-                        <Pressable
-                          key={season.id}
-                          onPress={() => selectSeason(season)}
-                          style={[
-                            styles.seasonTab,
-                            selected && styles.seasonTabSelected,
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          accessibilityLabel={`Select ${season.label}`}
-                        >
-                          <Text
-                            style={[
-                              styles.seasonTabText,
-                              selected && styles.seasonTabTextSelected,
-                            ]}
-                          >
-                            {season.label}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.seasonTabCount,
-                              selected && styles.seasonTabCountSelected,
-                            ]}
-                          >
-                            {season.episodeCount} EP
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-              </ScrollView>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rangeList}
               >
                 {isLoading
@@ -850,8 +806,12 @@ export default function Watch() {
                   <Pressable
                     key={server.id}
                     onPress={() => {
-                      if(server.id === "s3"){
-                        ToastAndroid.showWithGravity("Server unavailable", ToastAndroid.TOP, ToastAndroid.SHORT);
+                      if (server.id === "s3") {
+                        ToastAndroid.showWithGravity(
+                          "Server unavailable",
+                          ToastAndroid.TOP,
+                          ToastAndroid.SHORT,
+                        );
                         return;
                       }
                       setSelectedServerId(server.id);

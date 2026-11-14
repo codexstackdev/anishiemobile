@@ -25,6 +25,7 @@ export type TrendingAnime = Anime & {
 export type RecentAnime = Anime & {
   episode: string;
   release: string;
+  id: string;
 };
 
 export type AnimeImageProps = {
@@ -73,4 +74,34 @@ export type EpisodeRange = {
   start: number;
   end: number;
   label: string;
+};
+
+export type DiscoveryCategory = "For You" | "Trending" | "Top Rated" | "New";
+export type AnimeGenre =
+  | "All"
+  | "Action"
+  | "Adventure"
+  | "Fantasy"
+  | "Romance"
+  | "Sci-Fi"
+  | "Drama"
+  | "Comedy"
+  | "Mystery";
+
+export type AnimeDisc = {
+  id: string;
+  title: string;
+  japaneseTitle?: string;
+  synopsis: string;
+  year: number;
+  rating: number;
+  episodeCount: number;
+  status: "Airing" | "Complete" | "Upcoming";
+  genres: AnimeGenre[];
+  accent: string;
+  image?: ImageSourcePropType;
+  featured?: boolean;
+  trending?: boolean;
+  topRated?: boolean;
+  isNew?: boolean;
 };
