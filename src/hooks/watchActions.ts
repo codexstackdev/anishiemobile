@@ -31,7 +31,11 @@ export type WatchlistEntry = {
   updatedAt: number;
 };
 
-const file = new File(Paths.document, "watchlist.json");
+let fileRef: File | null = null;
+const getFile = () => {
+  if (!fileRef) fileRef = new File(Paths.document, "watchlist.json");
+  return fileRef;
+};
 
 let cache: WatchlistEntry[] | null = null;
 let queue: Promise<unknown> = Promise.resolve();
@@ -53,6 +57,7 @@ const toImageUri = (image: WatchlistInput["image"]): string | undefined => {
 async function load(): Promise<WatchlistEntry[]> {
   if (cache) return cache;
   try {
+    const file = getFile();
     if (!file.exists) {
       cache = [];
       return cache;
@@ -92,6 +97,7 @@ export function subscribeWatchlist(listener: () => void): () => void {
 function persist(list: WatchlistEntry[]) {
   cache = list;
   try {
+    const file = getFile();
     if (!file.exists) file.create();
     file.write(JSON.stringify(list));
   } catch (error) {

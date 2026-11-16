@@ -3,7 +3,11 @@ import { SearchEntry } from "./types";
 
 const MAX_SEARCHES = 15;
 
-const file = new File(Paths.document, "searches.json");
+let fileRef: File | null = null;
+const getFile = () => {
+  if (!fileRef) fileRef = new File(Paths.document, "searches.json");
+  return fileRef;
+};
 
 let cache: SearchEntry[] | null = null;
 let queue: Promise<unknown> = Promise.resolve();
@@ -25,6 +29,7 @@ export function subscribeSearches(listener: () => void): () => void {
 async function load(): Promise<SearchEntry[]> {
   if (cache) return cache;
   try {
+    const file = getFile();
     if (!file.exists) {
       cache = [];
       return cache;
@@ -47,6 +52,7 @@ async function load(): Promise<SearchEntry[]> {
 function persist(list: SearchEntry[]) {
   cache = list;
   try {
+    const file = getFile();
     if (!file.exists) file.create();
     file.write(JSON.stringify(list));
   } catch (error) {
