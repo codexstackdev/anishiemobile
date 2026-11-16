@@ -12,6 +12,7 @@ export type FeaturedAnime = Anime & {
   genre: string;
   rating: string;
   episodes: string;
+  rawEpisodes: number;
   imageLabel: string;
 };
 
@@ -104,4 +105,9 @@ export type AnimeDisc = {
   trending?: boolean;
   topRated?: boolean;
   isNew?: boolean;
+};
+
+export type SearchEntry = {
+  query: string;
+  searchedAt: number;
 };

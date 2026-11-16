@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
   ImageSourcePropType,
   Pressable,
   SafeAreaView,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +12,9 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { getWatchlist, removeFromWatchlist, setWatchStatus } from "@/hooks/watchActions";
+import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 
 type WatchStatus = "Watching" | "Completed" | "Plan to watch";
 type ViewMode = "grid" | "list";
@@ -25,10 +27,10 @@ type WatchlistAnime = {
   rating: number;
   year: number;
   episodeCount: number;
-  watchedEpisodes: number;
+  currentEpisode: number;
   status: WatchStatus;
   accent: string;
-  image?: ImageSourcePropType;
+  image?: ImageSourcePropType | string;
 };
 
 const COLORS = {
@@ -45,75 +47,6 @@ const COLORS = {
   gold: "#FBBF24",
   rose: "#FB7185",
 };
-
-const WATCHLIST_DATA: WatchlistAnime[] = [
-  {
-    id: "solo-leveling",
-    title: "Solo Leveling",
-    subtitle: "Ore dake Level Up na Ken",
-    rating: 9.1,
-    year: 2024,
-    episodeCount: 12,
-    watchedEpisodes: 8,
-    status: "Watching",
-    accent: "#57305F",
-  },
-  {
-    id: "frieren",
-    title: "Frieren: Beyond Journey's End",
-    subtitle: "Sousou no Frieren",
-    rating: 9.8,
-    year: 2023,
-    episodeCount: 28,
-    watchedEpisodes: 28,
-    status: "Completed",
-    accent: "#315B64",
-  },
-  {
-    id: "jujutsu-kaisen",
-    title: "Jujutsu Kaisen",
-    subtitle: "Jujutsu Kaisen Season 2",
-    rating: 8.7,
-    year: 2023,
-    episodeCount: 23,
-    watchedEpisodes: 12,
-    status: "Watching",
-    accent: "#3D355F",
-  },
-  {
-    id: "one-piece",
-    title: "One Piece",
-    subtitle: "East Blue Saga",
-    rating: 9.0,
-    year: 1999,
-    episodeCount: 1100,
-    watchedEpisodes: 64,
-    status: "Watching",
-    accent: "#6A492D",
-  },
-  {
-    id: "apothecary-diaries",
-    title: "The Apothecary Diaries",
-    subtitle: "Kusuriya no Hitorigoto",
-    rating: 9.0,
-    year: 2023,
-    episodeCount: 24,
-    watchedEpisodes: 0,
-    status: "Plan to watch",
-    accent: "#67404A",
-  },
-  {
-    id: "dandadan",
-    title: "DAN DA DAN",
-    subtitle: "First Season",
-    rating: 8.6,
-    year: 2024,
-    episodeCount: 12,
-    watchedEpisodes: 12,
-    status: "Completed",
-    accent: "#75414D",
-  },
-];
 
 const FILTERS: WatchFilter[] = [
   "All",
@@ -139,7 +72,7 @@ function PosterArt({
     >
       {anime.image ? (
         <Image
-          source={anime.image}
+          source={{uri: anime.image as any}}
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
         />
@@ -212,9 +145,22 @@ export default function Watchlist() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
   const [query, setQuery] = useState<string>("");
-  const [animeItems, setAnimeItems] =
-    useState<WatchlistAnime[]>(WATCHLIST_DATA);
+  const [animeItems, setAnimeItems] = useState<WatchlistAnime[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
 
+      getWatchlist().then((items) => {
+        if (isActive) {
+          setAnimeItems(items);
+        }
+      });
+
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
   const horizontalPadding = 20;
   const gap = 12;
   const cardWidth = (windowWidth - horizontalPadding * 2 - gap) / 2;
@@ -245,20 +191,29 @@ export default function Watchlist() {
     [animeItems],
   );
 
-  const removeFromList = (animeId: string) => {
-    setAnimeItems((current) => current.filter((anime) => anime.id !== animeId));
+  const removeFromList = async (animeId: string) => {
+  await removeFromWatchlist(animeId);
+  setAnimeItems((prev) => prev.filter((item) => item.id !== animeId));
+};
+
+
+  const openAnime = (animeId: string, ep: number) => {
+    router.navigate({
+      pathname: `../watch/${animeId}`,
+      params: {ep: ep}
+    });
   };
 
   const renderGridCard = (anime: WatchlistAnime, index: number) => {
     const progress =
       anime.episodeCount > 0
-        ? Math.min((anime.watchedEpisodes / anime.episodeCount) * 100, 100)
+        ? Math.min((anime.currentEpisode / anime.episodeCount) * 100, 100)
         : 0;
     return (
       <Pressable
         key={anime.id}
         onPress={() => {
-          /* Connect this card to your anime/watch route. */
+          openAnime(anime.id, anime.currentEpisode);
         }}
         style={[
           styles.gridCard,
@@ -300,7 +255,7 @@ export default function Watchlist() {
             <Text style={styles.progressCaption}>
               {anime.status === "Plan to watch"
                 ? `${anime.episodeCount} episodes`
-                : `${anime.watchedEpisodes} / ${anime.episodeCount} eps`}
+                : `${anime.currentEpisode} / ${anime.episodeCount} eps`}
             </Text>
             {anime.status !== "Plan to watch" && (
               <Text style={styles.progressPercent}>
@@ -321,14 +276,12 @@ export default function Watchlist() {
   const renderListCard = (anime: WatchlistAnime) => {
     const progress =
       anime.episodeCount > 0
-        ? Math.min((anime.watchedEpisodes / anime.episodeCount) * 100, 100)
+        ? Math.min((anime.currentEpisode / anime.episodeCount) * 100, 100)
         : 0;
     return (
       <Pressable
         key={anime.id}
-        onPress={() => {
-          /* Connect this card to your anime/watch route. */
-        }}
+         onPress={() => openAnime(anime.id, anime.currentEpisode)}
         style={styles.listCard}
         accessibilityRole="button"
         accessibilityLabel={`Open ${anime.title}, ${anime.status}`}
@@ -354,7 +307,7 @@ export default function Watchlist() {
             <Text style={styles.listEpisodeCount}>
               {anime.status === "Plan to watch"
                 ? `${anime.episodeCount} episodes`
-                : `Ep ${anime.watchedEpisodes} of ${anime.episodeCount}`}
+                : `Ep ${anime.currentEpisode} of ${anime.episodeCount}`}
             </Text>
           </View>
           {anime.status !== "Plan to watch" && (

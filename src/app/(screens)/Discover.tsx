@@ -1,4 +1,18 @@
-import React, { useEffect, useState } from "react";
+import {
+  fetchFeatured,
+  useDebounced,
+  useDiscoverList,
+} from "@/hooks/discoveryActions";
+import { AnimeDisc, AnimeGenre, DiscoveryCategory } from "@/hooks/types";
+import {
+  getWatchlistIds,
+  subscribeWatchlist,
+  toggleWatchlist,
+} from "@/hooks/watchActions";
+import { Ionicons } from "@expo/vector-icons";
+import { NavigationBar } from "expo-navigation-bar";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -13,15 +27,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
-import { AnimeDisc, AnimeGenre, DiscoveryCategory } from "@/hooks/types";
-import {
-  fetchFeatured,
-  useDebounced,
-  useDiscoverList,
-} from "@/hooks/discoveryActions";
-import { NavigationBar } from "expo-navigation-bar";
 
 const COLORS = {
   background: "#09090B",
@@ -136,15 +141,21 @@ function GenreChip({
 
 export default function Discover() {
   const { width: windowWidth } = useWindowDimensions();
-  const params = useLocalSearchParams<{ searchQuery: string }>();
+  const params = useLocalSearchParams<{ searchQuery?: string; t?: string }>();
   const [query, setQuery] = useState<string>(params.searchQuery ?? "");
   const [category, setCategory] = useState<DiscoveryCategory>("For You");
   const [selectedGenre, setSelectedGenre] = useState<"All" | AnimeGenre>("All");
   const [savedAnimeIds, setSavedAnimeIds] = useState<string[]>([]);
   const [activeFeatureIndex, setActiveFeatureIndex] = useState<number>(0);
   const [featuredAnime, setFeaturedAnime] = useState<AnimeDisc[]>([]);
-
   const debouncedQuery = useDebounced(query);
+
+  useEffect(() => {
+  if (params.searchQuery === undefined) return;
+  setQuery(params.searchQuery);
+  setCategory("For You");
+  setSelectedGenre("All");
+}, [params.searchQuery, params.t]);
 
   const { items, loading, loadingMore, hasNext, loadMore } = useDiscoverList(
     debouncedQuery.trim(),
@@ -156,20 +167,24 @@ export default function Discover() {
     fetchFeatured().then(setFeaturedAnime).catch(console.log);
   }, []);
 
+  useEffect(() => {
+    const sync = () => {
+      getWatchlistIds().then(setSavedAnimeIds);
+    };
+    sync();
+    return subscribeWatchlist(sync);
+  }, []);
+
   const horizontalPadding = 20;
   const gridGap = 12;
   const cardWidth = (windowWidth - horizontalPadding * 2 - gridGap) / 2;
 
   const openAnime = (animeId: string) => {
-    router.push(`../watch/${animeId}`);
+    router.navigate(`../watch/${animeId}`);
   };
 
-  const toggleSaved = (animeId: string) => {
-    setSavedAnimeIds((current) =>
-      current.includes(animeId)
-        ? current.filter((id) => id !== animeId)
-        : [...current, animeId],
-    );
+  const onToggle = (item: AnimeDisc) => {
+    toggleWatchlist(item);
   };
 
   const onFeaturedScroll = (event: {
@@ -186,18 +201,21 @@ export default function Discover() {
     nativeEvent,
   }: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 600) {
+    if (
+      layoutMeasurement.height + contentOffset.y >=
+      contentSize.height - 600
+    ) {
       loadMore();
     }
   };
 
   const handleSearchChange = (text: string) => {
-  if (query.length === 0 && text.length > 0) {
-    setCategory("For You");
-    setSelectedGenre("All");
-  }
-  setQuery(text);
-};
+    if (query.length === 0 && text.length > 0) {
+      setCategory("For You");
+      setSelectedGenre("All");
+    }
+    setQuery(text);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -209,7 +227,8 @@ export default function Discover() {
         onScroll={onMainScroll}
         scrollEventThrottle={200}
       >
-        <NavigationBar hidden={true}/>
+
+        <NavigationBar hidden={true} />
         <View style={styles.header}>
           <View style={styles.brandLine}>
             <View style={styles.brandLockup}>
@@ -351,18 +370,18 @@ export default function Discover() {
                         <Text style={styles.featureRankText}>0{index + 1}</Text>
                       </View>
                       <Pressable
-                        onPress={() => toggleSaved(anime.id)}
+                        onPress={() => onToggle(anime)}
                         style={styles.featureSaveButton}
                         accessibilityRole="button"
                         accessibilityLabel={
-                          savedAnimeIds.includes(anime.id)
+                          savedAnimeIds.includes(String(anime.id))
                             ? "Remove from watchlist"
                             : "Add to watchlist"
                         }
                       >
                         <Ionicons
                           name={
-                            savedAnimeIds.includes(anime.id)
+                            savedAnimeIds.includes(String(anime.id))
                               ? "bookmark"
                               : "bookmark-outline"
                           }
@@ -544,7 +563,7 @@ export default function Discover() {
                           </View>
                         ) : null}
                         <Pressable
-                          onPress={() => toggleSaved(anime.id)}
+                          onPress={() => onToggle(anime)}
                           style={styles.saveButton}
                           accessibilityRole="button"
                           accessibilityLabel={

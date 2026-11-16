@@ -96,6 +96,7 @@ export async function fetchHomeData(): Promise<{
       year: m.seasonYear ? String(m.seasonYear) : "TBA",
       genre: m.genres?.[0] ?? "Anime",
       rating: formatScore(m.averageScore),
+      rawEpisodes: m.episodes,
       episodes: m.episodes
         ? `${m.episodes} EPISODES`
         : m.status === "RELEASING"

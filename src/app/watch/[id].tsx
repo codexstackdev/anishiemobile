@@ -1,4 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { AnimeDetails, fetchAnimeDetails } from "@/hooks/actions";
+import { Episode, EpisodeRange } from "@/hooks/types";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
   ImageSourcePropType,
@@ -13,10 +16,9 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
 import AnimeFrame from "../components/AnimeFrame";
-import { Episode, EpisodeRange } from "@/hooks/types";
-import { AnimeDetails, fetchAnimeDetails } from "@/hooks/actions";
+import { addFavorite, isFavorite, removeFavorite } from "@/hooks/fileActions";
+import { addToWatchlist, isInWatchlist, removeFromWatchlist, setCurrentEpisode, setWatchStatus } from "@/hooks/watchActions";
 
 type EpisodeViewMode = "list" | "grid";
 type AudioMode = "sub" | "dub";
@@ -216,6 +218,11 @@ export default function Watch() {
   const [data, setData] = useState<AnimeDetails | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState<boolean>(false);
+  const isGoingBack = useRef(false);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    isInWatchlist(String(id)).then(setSaved);
+  }, [id]);
 
   useEffect(() => {
     let isActive = true;
@@ -319,9 +326,10 @@ export default function Watch() {
     router.setParams({ id: animeId });
   };
 
-  const selectEpisode = (episode: Episode) => {
+  const selectEpisode = async(episode: Episode) => {
     setSelectedEpisodeId(episode.id);
     setSelectedEpisodeNumber(episode.number);
+    await setCurrentEpisode(String(id), episode.number);
     const rangeIndex = episodeRanges.findIndex(
       (r) => episode.number >= r.start && episode.number <= r.end,
     );
@@ -337,13 +345,35 @@ export default function Watch() {
     setSelectedEpisodeNumber(firstEpisode.number);
   };
 
+  const handleBack = () => {
+    if (isGoingBack.current) return;
+    isGoingBack.current = true;
+
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/");
+    }
+  };
+
+  const onToggle = async () => {
+    if (saved) {
+      setSaved(false);
+      await removeFromWatchlist(String(id));
+    } else {
+      if (!data) return;
+      setSaved(true);
+      await addToWatchlist(data);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
         <View style={styles.stickyHeader}>
           <View style={styles.topBar}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={handleBack}
               style={styles.backButton}
               accessibilityRole="button"
               accessibilityLabel="Go back"
@@ -440,20 +470,71 @@ export default function Watch() {
           <View style={styles.contentPadding}>
             <View style={styles.actionRow}>
               <Pressable
-                style={styles.actionButton}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  saved && styles.actionButtonSaved,
+                  pressed && styles.actionButtonPressed,
+                ]}
+                onPress={onToggle}
                 accessibilityRole="button"
-                accessibilityLabel="Add to watchlist"
+                accessibilityLabel={
+                  saved ? "Remove from watchlist" : "Add to watchlist"
+                }
+                accessibilityState={{ selected: saved }}
               >
-                <Text style={styles.actionIcon}>＋</Text>
-                <Text style={styles.actionLabel}>My List</Text>
+                <View
+                  style={[
+                    styles.actionIconWrap,
+                    saved && styles.actionIconWrapSaved,
+                  ]}
+                >
+                  <Text
+                    style={[styles.actionIcon, saved && styles.actionIconSaved]}
+                  >
+                    {saved ? "✓" : "＋"}
+                  </Text>
+                </View>
+
+                <View style={styles.actionCopy}>
+                  <Text style={styles.actionLabel}>
+                    {saved ? "In My List" : "My List"}
+                  </Text>
+                  <Text style={styles.actionHint}>
+                    {saved ? "Saved for later" : "Add to your collection"}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.actionIndicator,
+                    saved && styles.actionIndicatorSaved,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.actionIndicatorText,
+                      saved && styles.actionIndicatorTextSaved,
+                    ]}
+                  >
+                    {saved ? "✓" : "＋"}
+                  </Text>
+                </View>
               </Pressable>
               <Pressable
-                style={styles.actionButton}
+                style={styles.shareActionButton}
                 accessibilityRole="button"
                 accessibilityLabel="Share anime"
               >
-                <Text style={styles.actionIcon}>↗</Text>
-                <Text style={styles.actionLabel}>Share</Text>
+                <View style={styles.actionIconWrap}>
+                  <Text style={styles.shareActionIcon}>↗</Text>
+                </View>
+                <View style={styles.actionCopy}>
+                  <Text style={styles.actionLabel}>Share</Text>
+                  <Text style={styles.actionHint}>Send this anime</Text>
+                </View>
+                <View style={styles.actionIndicator}>
+                  <Text style={styles.shareActionArrow}>›</Text>
+                </View>
               </Pressable>
             </View>
 
@@ -1085,25 +1166,8 @@ const styles = StyleSheet.create({
   metaSeparator: { color: "#595B6E", fontSize: 10, marginHorizontal: 7 },
   actionRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 20,
-    paddingVertical: 13,
-    backgroundColor: "rgba(255,255,255,0.035)",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.055)",
-  },
-  actionButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 70,
-  },
-  actionIcon: { color: "#E7E4F2", fontSize: 19, lineHeight: 22 },
-  actionLabel: {
-    color: COLORS.muted,
-    fontSize: 8,
-    fontWeight: "600",
-    marginTop: 4,
+    alignItems: "stretch",
+    marginTop: 18,
   },
   section: { marginTop: 27 },
   sectionHeading: {
@@ -1379,7 +1443,6 @@ const styles = StyleSheet.create({
   episodeImageWrapGrid: { width: "100%", height: 105 },
   episodeInfoGrid: { flex: 0, marginLeft: 0, marginRight: 0, marginTop: 9 },
 
-  // Metadata chips, expandable synopsis, and loading skeletons.
   genreChip: {
     paddingHorizontal: 8,
     paddingVertical: 5,
@@ -1605,4 +1668,118 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.purple,
   },
   unloadedEpisodeDescription: { color: "#8E91A5" },
+  actionButton: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+  },
+  shareActionButton: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    marginLeft: 9,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+  },
+  actionButtonSaved: {
+    backgroundColor: "rgba(124,92,252,0.12)",
+    borderColor: "rgba(167,139,250,0.34)",
+  },
+  actionButtonPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.98 }],
+  },
+  actionIconWrap: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.075)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+  },
+  actionIconWrapSaved: {
+    backgroundColor: "rgba(167,139,250,0.18)",
+    borderColor: "rgba(167,139,250,0.22)",
+  },
+  actionIcon: {
+    color: "#E8E3F5",
+    fontSize: 22,
+    lineHeight: 25,
+    fontWeight: "400",
+    marginTop: -2,
+  },
+  actionIconSaved: {
+    color: "#D8CEFF",
+    fontSize: 17,
+    fontWeight: "800",
+    marginTop: 0,
+  },
+  shareActionIcon: {
+    color: "#D8CEFF",
+    fontSize: 17,
+    fontWeight: "700",
+    marginTop: -2,
+  },
+  shareActionArrow: {
+    color: "#A1A1AA",
+    fontSize: 19,
+    fontWeight: "300",
+    marginTop: -2,
+  },
+  actionCopy: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 9,
+  },
+  actionLabel: {
+    color: "#F8F7FF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  actionHint: {
+    color: "#9294A8",
+    fontSize: 7,
+    fontWeight: "500",
+    marginTop: 4,
+  },
+  actionIndicator: {
+    width: 23,
+    height: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 5,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.055)",
+  },
+  actionIndicatorSaved: {
+    backgroundColor: "rgba(167,139,250,0.22)",
+  },
+  actionIndicatorText: {
+    color: "#A1A1AA",
+    fontSize: 14,
+    fontWeight: "500",
+    marginTop: -1,
+  },
+  actionIndicatorTextSaved: {
+    color: "#D8CEFF",
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 0,
+  },
 });
