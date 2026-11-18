@@ -1,5 +1,9 @@
 import { fetchHomeData } from "@/hooks/actions";
-import { addSearch, getSearches, subscribeSearches } from "@/hooks/recentSearch";
+import {
+  addSearch,
+  getSearches,
+  subscribeSearches,
+} from "@/hooks/recentSearch";
 import {
   AnimeImageProps,
   FeaturedSlideProps,
@@ -7,6 +11,7 @@ import {
   SearchEntry,
   TrendingAnime,
 } from "@/hooks/types";
+import { getUser, User } from "@/hooks/userActions";
 import {
   isInWatchlist,
   subscribeWatchlist,
@@ -102,16 +107,36 @@ function FeaturedSlide({ item, width }: FeaturedSlideProps) {
           <Text style={styles.featuredText}>FEATURED ANIME</Text>
         </View>
         <Pressable
-          style={styles.bookmarkButton}
+          style={({ pressed }) => [
+            styles.bookmarkButton,
+            saved && styles.bookmarkButtonSaved,
+            pressed && styles.bookmarkButtonPressed,
+          ]}
           accessibilityRole="button"
           onPress={onToggle}
-          accessibilityLabel={`Add ${item.title} to watchlist`}
+          accessibilityLabel={
+            saved
+              ? `Remove ${item.title} from watchlist`
+              : `Add ${item.title} to watchlist`
+          }
+          accessibilityState={{ selected: saved }}
+          accessibilityHint={
+            saved
+              ? "Removes this anime from My List"
+              : "Saves this anime to My List"
+          }
         >
-          {saved ? (
-            <Ionicons name="heart" style={styles.bookmarkGlyph} />
-          ) : (
-            <Ionicons name="add-outline" style={styles.bookmarkGlyph} />
-          )}
+          <Ionicons
+            name={saved ? "bookmark" : "bookmark-outline"}
+            size={14}
+            color={saved ? "#FFFFFF" : "#EAE6F7"}
+          />
+          <Text
+            style={[styles.bookmarkLabel, saved && styles.bookmarkLabelSaved]}
+          >
+            {saved ? "SAVED" : "MY LIST"}
+          </Text>
+          {saved && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
         </Pressable>
       </View>
       <View style={styles.heroCopy}>
@@ -295,10 +320,12 @@ export default function Index() {
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [recentSearches, setRecentSearches] = useState<SearchEntry[]>([]);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const sync = () => {
       getSearches().then(setRecentSearches);
+      getUser().then(setUser);
     };
     sync();
     return subscribeSearches(sync);
@@ -376,7 +403,9 @@ export default function Index() {
                 accessibilityRole="button"
                 accessibilityLabel="Profile"
               >
-                <Text style={styles.avatarText}>K</Text>
+                <Text style={styles.avatarText}>
+                  {user?.username.slice(0, 2)}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -385,10 +414,11 @@ export default function Index() {
             <View>
               <Text style={styles.eyebrow}>YOUR ANIME, ALL IN ONE PLACE</Text>
               <Text style={styles.welcomeTitle}>Welcome back.</Text>
+              <Text style={styles.userName}>{user?.username}</Text>
             </View>
             <View style={styles.streakPill}>
-              <Text style={styles.streakIcon}>✦</Text>
-              <Text style={styles.streakText}>7 day streak</Text>
+              <Ionicons style={styles.streakIcon} name="flame" />
+              <Text style={styles.streakText}>{user?.streak} day streak</Text>
             </View>
           </View>
 
@@ -529,9 +559,7 @@ export default function Index() {
                     {searchQuery.trim() ? "YOUR SEARCH" : "QUICK DISCOVERY"}
                   </Text>
                   <Text style={styles.searchSectionTitle}>
-                    {searchQuery.trim()
-                      ? "Ready to search"
-                      : "Recent searches"}
+                    {searchQuery.trim() ? "Ready to search" : "Recent searches"}
                   </Text>
                 </View>
                 <View style={styles.searchSparkleBadge}>
@@ -702,6 +730,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.8,
   },
+  userName: {
+    color: COLORS.purple,
+    fontSize: 27,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+  },
   streakPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -791,20 +825,43 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   bookmarkButton: {
-    width: 31,
-    height: 31,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    minHeight: 34,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(9,10,18,0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  bookmarkGlyph: {
-    color: COLORS.white,
-    fontSize: 23,
-    lineHeight: 25,
-    fontWeight: "300",
+  bookmarkButtonSaved: {
+    backgroundColor: "rgba(124,92,252,0.88)",
+    borderColor: "rgba(221,214,254,0.55)",
+    shadowColor: COLORS.violet,
+    shadowOpacity: 0.32,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  bookmarkButtonPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.96 }],
+  },
+  bookmarkLabel: {
+    color: "#F1EDFC",
+    fontSize: 7,
+    fontWeight: "900",
+    letterSpacing: 0.75,
+    marginLeft: 6,
+  },
+  bookmarkLabelSaved: {
+    color: "#FFFFFF",
+    marginRight: 4,
   },
   heroCopy: { position: "absolute", left: 19, bottom: 38, right: 12 },
   heroKicker: {

@@ -4,6 +4,7 @@ import {
   useDiscoverList,
 } from "@/hooks/discoveryActions";
 import { AnimeDisc, AnimeGenre, DiscoveryCategory } from "@/hooks/types";
+import { getUser, User } from "@/hooks/userActions";
 import {
   getWatchlistIds,
   subscribeWatchlist,
@@ -12,9 +13,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { NavigationBar } from "expo-navigation-bar";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  FlatList,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -27,6 +30,14 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import Svg, { Circle } from "react-native-svg";
+
+const SCROLL_RING_SIZE = 62;
+const SCROLL_RING_STROKE = 3;
+const SCROLL_RING_CENTER = SCROLL_RING_SIZE / 2;
+const SCROLL_RING_RADIUS = (SCROLL_RING_SIZE - SCROLL_RING_STROKE) / 2;
+const SCROLL_RING_CIRCUMFERENCE = 2 * Math.PI * SCROLL_RING_RADIUS;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const COLORS = {
   background: "#09090B",
@@ -148,14 +159,24 @@ export default function Discover() {
   const [savedAnimeIds, setSavedAnimeIds] = useState<string[]>([]);
   const [activeFeatureIndex, setActiveFeatureIndex] = useState<number>(0);
   const [featuredAnime, setFeaturedAnime] = useState<AnimeDisc[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+  const listRef = useRef<FlatList<AnimeDisc> | null>(null);
+  const scrollProgress = useRef(new Animated.Value(0)).current;
+  const scrollProgressValueRef = useRef<number>(0);
+  const showScrollTopRef = useRef<boolean>(false);
+  const progressRingOffset = scrollProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SCROLL_RING_CIRCUMFERENCE, 0],
+  });
   const debouncedQuery = useDebounced(query);
 
   useEffect(() => {
-  if (params.searchQuery === undefined) return;
-  setQuery(params.searchQuery);
-  setCategory("For You");
-  setSelectedGenre("All");
-}, [params.searchQuery, params.t]);
+    if (params.searchQuery === undefined) return;
+    setQuery(params.searchQuery);
+    setCategory("For You");
+    setSelectedGenre("All");
+  }, [params.searchQuery, params.t]);
 
   const { items, loading, loadingMore, hasNext, loadMore } = useDiscoverList(
     debouncedQuery.trim(),
@@ -170,6 +191,7 @@ export default function Discover() {
   useEffect(() => {
     const sync = () => {
       getWatchlistIds().then(setSavedAnimeIds);
+      getUser().then(setUser);
     };
     sync();
     return subscribeWatchlist(sync);
@@ -201,11 +223,22 @@ export default function Discover() {
     nativeEvent,
   }: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-    if (
-      layoutMeasurement.height + contentOffset.y >=
-      contentSize.height - 600
-    ) {
-      loadMore();
+    const maxScroll = Math.max(
+      contentSize.height - layoutMeasurement.height,
+      0,
+    );
+    const nextProgress =
+      maxScroll === 0
+        ? 0
+        : Math.min(Math.max(contentOffset.y / maxScroll, 0), 1);
+    // Drive the SVG ring directly; this avoids React re-rendering the large list while scrolling.
+    scrollProgressValueRef.current = nextProgress;
+    scrollProgress.setValue(nextProgress);
+
+    const shouldShowButton = contentOffset.y > 420;
+    if (shouldShowButton !== showScrollTopRef.current) {
+      showScrollTopRef.current = shouldShowButton;
+      setShowScrollTop(shouldShowButton);
     }
   };
 
@@ -219,430 +252,520 @@ export default function Discover() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        onScroll={onMainScroll}
-        scrollEventThrottle={200}
-      >
-
-        <NavigationBar hidden={true} />
-        <View style={styles.header}>
-          <View style={styles.brandLine}>
-            <View style={styles.brandLockup}>
-              <View style={styles.brandIcon}>
-                <Text style={styles.brandIconText}>A</Text>
-              </View>
-              <Text style={styles.brandName}>anishie</Text>
-              <View style={styles.premiumPill}>
-                <Text style={styles.premiumText}>PLUS</Text>
-              </View>
-            </View>
-            <View style={styles.headerRight}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>K</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.headingRow}>
-            <View>
-              <Text style={styles.eyebrow}>YOUR NEXT FAVORITE</Text>
-              <Text style={styles.pageTitle}>Discover</Text>
-            </View>
-            <View style={styles.headerSparkle}>
-              <Ionicons
-                name="aperture-outline"
-                size={23}
-                color={COLORS.primary}
-              />
-            </View>
-          </View>
-          <Text style={styles.pageSubtitle}>
-            Find a new world to get lost in.
-          </Text>
-        </View>
-
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color={COLORS.mutedForeground} />
-          <TextInput
-            value={query}
-            onChangeText={handleSearchChange}
-            placeholder="Search anime, genres, or moods"
-            placeholderTextColor="#71717A"
-            style={styles.searchInput}
-            returnKeyType="search"
-            accessibilityLabel="Search anime"
-          />
-          {query.length > 0 ? (
-            <Pressable
-              onPress={() => setQuery("")}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-            >
-              <Ionicons
-                name="close-circle"
-                size={18}
-                color={COLORS.mutedForeground}
-              />
-            </Pressable>
-          ) : (
-            <View style={styles.searchShortcut}>
-              <Text style={styles.searchShortcutText}>⌘ K</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.categoryWrap}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryList}
-          >
-            {CATEGORIES.map((item) => {
-              const selected = category === item;
-              return (
-                <Pressable
-                  key={item}
-                  onPress={() => setCategory(item)}
-                  style={[
-                    styles.categoryPill,
-                    selected && styles.categoryPillSelected,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      selected && styles.categoryTextSelected,
-                    ]}
-                  >
-                    {item}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {category === "For You" &&
-          query.length === 0 &&
-          selectedGenre === "All" &&
-          featuredAnime.length > 0 && (
-            <View style={styles.featureSection}>
-              <View style={styles.sectionHeading}>
-                <View>
-                  <Text style={styles.sectionEyebrow}>EDITOR'S PICK</Text>
-                  <Text style={styles.sectionTitle}>Featured anime</Text>
-                </View>
-                <View style={styles.featureLabel}>
-                  <Ionicons name="flash" size={11} color={COLORS.gold} />
-                  <Text style={styles.featureLabelText}>THIS WEEK</Text>
-                </View>
-              </View>
-
-              <ScrollView
-                horizontal
-                pagingEnabled
-                snapToInterval={windowWidth - horizontalPadding * 2 + 12}
-                decelerationRate="fast"
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.featuredScroll}
-                onScroll={onFeaturedScroll}
-                scrollEventThrottle={16}
-              >
-                {featuredAnime.map((anime, index) => (
-                  <View
-                    key={anime.id}
-                    style={[
-                      styles.featureCard,
-                      { width: windowWidth - horizontalPadding * 2 },
-                    ]}
-                  >
-                    <PosterArtwork anime={anime} />
-                    <View style={styles.featureOverlay} />
-                    <View style={styles.featureTopRow}>
-                      <View style={styles.featureRank}>
-                        <Text style={styles.featureRankText}>0{index + 1}</Text>
-                      </View>
-                      <Pressable
-                        onPress={() => onToggle(anime)}
-                        style={styles.featureSaveButton}
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          savedAnimeIds.includes(String(anime.id))
-                            ? "Remove from watchlist"
-                            : "Add to watchlist"
-                        }
-                      >
-                        <Ionicons
-                          name={
-                            savedAnimeIds.includes(String(anime.id))
-                              ? "bookmark"
-                              : "bookmark-outline"
-                          }
-                          size={17}
-                          color={COLORS.foreground}
-                        />
-                      </Pressable>
+      <View style={styles.screen}>
+        <FlatList
+          ref={listRef}
+          data={loading ? [] : items}
+          extraData={savedAnimeIds}
+          keyExtractor={(anime) => anime.id}
+          numColumns={2}
+          columnWrapperStyle={styles.animeGridRow}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onScroll={onMainScroll}
+          scrollEventThrottle={48}
+          onEndReached={() => {
+            if (hasNext && !loading && !loadingMore) loadMore();
+          }}
+          onEndReachedThreshold={0.55}
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={50}
+          windowSize={7}
+          removeClippedSubviews
+          ListHeaderComponent={
+            <>
+              <NavigationBar hidden={true} />
+              <View style={styles.header}>
+                <View style={styles.brandLine}>
+                  <View style={styles.brandLockup}>
+                    <View style={styles.brandIcon}>
+                      <Text style={styles.brandIconText}>A</Text>
                     </View>
-                    <View style={styles.featureContent}>
-                      <View style={styles.featureMetaRow}>
-                        <View style={styles.featureMetaBadge}>
-                          <Ionicons name="star" size={10} color={COLORS.gold} />
-                          <Text style={styles.featureMetaRating}>
-                            {anime.rating.toFixed(1)}
-                          </Text>
-                        </View>
-                        <Text style={styles.featureMetaText}>{anime.year}</Text>
-                        <View style={styles.metaDot} />
-                        <Text style={styles.featureMetaText}>
-                          {anime.episodeCount} EPISODES
-                        </Text>
-                      </View>
-                      <Text style={styles.featureTitle} numberOfLines={2}>
-                        {anime.title}
-                      </Text>
-                      <Text style={styles.featureSynopsis} numberOfLines={2}>
-                        {anime.synopsis}
-                      </Text>
-                      <View style={styles.featureBottomRow}>
-                        <View style={styles.featureTags}>
-                          {anime.genres.slice(0, 2).map((genre) => (
-                            <View key={genre} style={styles.featureGenreTag}>
-                              <Text style={styles.featureGenreTagText}>
-                                {genre}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                        <Pressable
-                          onPress={() => openAnime(anime.id)}
-                          style={styles.featurePlayButton}
-                          accessibilityRole="button"
-                          accessibilityLabel={`View ${anime.title}`}
-                        >
-                          <Ionicons name="play" size={13} color="#09090B" />
-                          <Text style={styles.featurePlayText}>Explore</Text>
-                        </Pressable>
-                      </View>
+                    <Text style={styles.brandName}>anishie</Text>
+                    <View style={styles.premiumPill}>
+                      <Text style={styles.premiumText}>PLUS</Text>
                     </View>
                   </View>
-                ))}
-              </ScrollView>
-              <View style={styles.featurePagination}>
-                {featuredAnime.map((anime, index) => (
-                  <View
-                    key={anime.id}
-                    style={[
-                      styles.paginationDot,
-                      index === activeFeatureIndex &&
-                        styles.paginationDotActive,
-                    ]}
-                  />
-                ))}
-                <Text style={styles.paginationLabel}>
-                  {String(activeFeatureIndex + 1).padStart(2, "0")} /{" "}
-                  {String(featuredAnime.length).padStart(2, "0")}
+                  <View style={styles.headerRight}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>
+                        {user?.username.slice(0, 2)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.headingRow}>
+                  <View>
+                    <Text style={styles.eyebrow}>YOUR NEXT FAVORITE</Text>
+                    <Text style={styles.pageTitle}>Discover</Text>
+                  </View>
+                  <View style={styles.headerSparkle}>
+                    <Ionicons
+                      name="aperture-outline"
+                      size={23}
+                      color={COLORS.primary}
+                    />
+                  </View>
+                </View>
+                <Text style={styles.pageSubtitle}>
+                  Find a new world to get lost in.
                 </Text>
               </View>
-            </View>
-          )}
 
-        <View style={styles.genreSection}>
-          <View style={styles.sectionHeading}>
-            <View>
-              <Text style={styles.sectionEyebrow}>BROWSE BY MOOD</Text>
-              <Text style={styles.sectionTitle}>Explore genres</Text>
-            </View>
-            <Ionicons
-              name="options-outline"
-              size={19}
-              color={COLORS.mutedForeground}
-            />
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.genreList}
-          >
-            {GENRES.map((genre) => (
-              <GenreChip
-                key={genre}
-                label={genre}
-                selected={selectedGenre === genre}
-                onPress={() => setSelectedGenre(genre)}
-              />
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={styles.catalogSection}>
-          <View style={styles.catalogHeading}>
-            <View>
-              <Text style={styles.sectionEyebrow}>
-                {category === "For You"
-                  ? "HANDPICKED FOR YOU"
-                  : `THE ${category.toUpperCase()} LIST`}
-              </Text>
-              <Text style={styles.sectionTitle}>
-                {selectedGenre === "All"
-                  ? "Anime to explore"
-                  : `${selectedGenre} anime`}
-              </Text>
-            </View>
-            <View style={styles.resultCount}>
-              <Text style={styles.resultCountText}>
-                {items.length}
-                {hasNext ? "+" : ""} TITLES
-              </Text>
-            </View>
-          </View>
-
-          {loading ? (
-            <ActivityIndicator
-              color={COLORS.primary}
-              style={{ paddingVertical: 40 }}
-            />
-          ) : items.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
+              <View style={styles.searchWrap}>
                 <Ionicons
-                  name="search-outline"
-                  size={24}
-                  color={COLORS.primary}
+                  name="search"
+                  size={18}
+                  color={COLORS.mutedForeground}
                 />
-              </View>
-              <Text style={styles.emptyTitle}>No anime found</Text>
-              <Text style={styles.emptyCopy}>
-                Try another title or genre to find your next watch.
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setQuery("");
-                  setSelectedGenre("All");
-                  setCategory("For You");
-                }}
-                style={styles.resetButton}
-                accessibilityRole="button"
-              >
-                <Text style={styles.resetButtonText}>Reset filters</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.animeGrid}>
-              {items.map((anime, index) => {
-                const saved = savedAnimeIds.includes(anime.id);
-                return (
+                <TextInput
+                  value={query}
+                  onChangeText={handleSearchChange}
+                  placeholder="Search anime, genres, or moods"
+                  placeholderTextColor="#71717A"
+                  style={styles.searchInput}
+                  returnKeyType="search"
+                  accessibilityLabel="Search anime"
+                />
+                {query.length > 0 ? (
                   <Pressable
-                    key={anime.id}
-                    onPress={() => openAnime(anime.id)}
-                    style={[
-                      styles.animeCard,
-                      { width: cardWidth },
-                      index % 2 === 0 ? styles.cardLifted : undefined,
-                    ]}
+                    onPress={() => setQuery("")}
+                    hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={`Open ${anime.title}`}
+                    accessibilityLabel="Clear search"
                   >
-                    <View style={styles.animePosterWrap}>
-                      <PosterArtwork anime={anime} compact />
-                      <View style={styles.posterTopBadges}>
-                        {anime.status === "Airing" ? (
-                          <View style={styles.airingBadge}>
-                            <View style={styles.airingDot} />
-                            <Text style={styles.airingBadgeText}>AIRING</Text>
-                          </View>
-                        ) : anime.isNew ? (
-                          <View style={styles.newBadge}>
-                            <Text style={styles.newBadgeText}>NEW</Text>
-                          </View>
-                        ) : null}
-                        <Pressable
-                          onPress={() => onToggle(anime)}
-                          style={styles.saveButton}
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            saved
-                              ? `Remove ${anime.title} from watchlist`
-                              : `Save ${anime.title}`
-                          }
-                          hitSlop={6}
-                        >
-                          <Ionicons
-                            name={saved ? "heart" : "heart-outline"}
-                            size={15}
-                            color={saved ? "#FB7185" : COLORS.foreground}
-                          />
-                        </Pressable>
-                      </View>
-                      <View style={styles.posterBottomBadges}>
-                        <View style={styles.ratingBadge}>
-                          <Ionicons name="star" size={9} color={COLORS.gold} />
-                          <Text style={styles.ratingBadgeText}>
-                            {anime.rating.toFixed(1)}
-                          </Text>
-                        </View>
-                        <View style={styles.episodeBadge}>
-                          <Text style={styles.episodeBadgeText}>
-                            {anime.episodeCount === 1
-                              ? "MOVIE"
-                              : `${anime.episodeCount} EPS`}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    <View style={styles.animeCardInfo}>
-                      <Text style={styles.animeCardTitle} numberOfLines={1}>
-                        {anime.title}
-                      </Text>
-                      <Text style={styles.animeCardJapanese} numberOfLines={1}>
-                        {anime.japaneseTitle ??
-                          `${anime.year} · ${anime.status}`}
-                      </Text>
-                      <View style={styles.animeCardTags}>
-                        {anime.genres.slice(0, 2).map((genre) => (
-                          <Text
-                            key={genre}
-                            style={styles.animeCardTag}
-                            numberOfLines={1}
-                          >
-                            {genre}
-                          </Text>
-                        ))}
-                      </View>
-                    </View>
+                    <Ionicons
+                      name="close-circle"
+                      size={18}
+                      color={COLORS.mutedForeground}
+                    />
                   </Pressable>
-                );
-              })}
+                ) : (
+                  <View style={styles.searchShortcut}>
+                    <Text style={styles.searchShortcutText}>⌘ K</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.categoryWrap}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.categoryList}
+                >
+                  {CATEGORIES.map((item) => {
+                    const selected = category === item;
+                    return (
+                      <Pressable
+                        key={item}
+                        onPress={() => setCategory(item)}
+                        style={[
+                          styles.categoryPill,
+                          selected && styles.categoryPillSelected,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryText,
+                            selected && styles.categoryTextSelected,
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {category === "For You" &&
+                query.length === 0 &&
+                selectedGenre === "All" &&
+                featuredAnime.length > 0 && (
+                  <View style={styles.featureSection}>
+                    <View style={styles.sectionHeading}>
+                      <View>
+                        <Text style={styles.sectionEyebrow}>EDITOR'S PICK</Text>
+                        <Text style={styles.sectionTitle}>Featured anime</Text>
+                      </View>
+                      <View style={styles.featureLabel}>
+                        <Ionicons name="flash" size={11} color={COLORS.gold} />
+                        <Text style={styles.featureLabelText}>THIS WEEK</Text>
+                      </View>
+                    </View>
+
+                    <ScrollView
+                      horizontal
+                      pagingEnabled
+                      snapToInterval={windowWidth - horizontalPadding * 2 + 12}
+                      decelerationRate="fast"
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.featuredScroll}
+                      onScroll={onFeaturedScroll}
+                      scrollEventThrottle={16}
+                    >
+                      {featuredAnime.map((anime, index) => (
+                        <View
+                          key={anime.id}
+                          style={[
+                            styles.featureCard,
+                            { width: windowWidth - horizontalPadding * 2 },
+                          ]}
+                        >
+                          <PosterArtwork anime={anime} />
+                          <View style={styles.featureOverlay} />
+                          <View style={styles.featureTopRow}>
+                            <View style={styles.featureRank}>
+                              <Text style={styles.featureRankText}>
+                                0{index + 1}
+                              </Text>
+                            </View>
+                            <Pressable
+                              onPress={() => onToggle(anime)}
+                              style={styles.featureSaveButton}
+                              accessibilityRole="button"
+                              accessibilityLabel={
+                                savedAnimeIds.includes(String(anime.id))
+                                  ? "Remove from watchlist"
+                                  : "Add to watchlist"
+                              }
+                            >
+                              <Ionicons
+                                name={
+                                  savedAnimeIds.includes(String(anime.id))
+                                    ? "bookmark"
+                                    : "bookmark-outline"
+                                }
+                                size={17}
+                                color={COLORS.foreground}
+                              />
+                            </Pressable>
+                          </View>
+                          <View style={styles.featureContent}>
+                            <View style={styles.featureMetaRow}>
+                              <View style={styles.featureMetaBadge}>
+                                <Ionicons
+                                  name="star"
+                                  size={10}
+                                  color={COLORS.gold}
+                                />
+                                <Text style={styles.featureMetaRating}>
+                                  {anime.rating.toFixed(1)}
+                                </Text>
+                              </View>
+                              <Text style={styles.featureMetaText}>
+                                {anime.year}
+                              </Text>
+                              <View style={styles.metaDot} />
+                              <Text style={styles.featureMetaText}>
+                                {anime.episodeCount} EPISODES
+                              </Text>
+                            </View>
+                            <Text style={styles.featureTitle} numberOfLines={2}>
+                              {anime.title}
+                            </Text>
+                            <Text
+                              style={styles.featureSynopsis}
+                              numberOfLines={2}
+                            >
+                              {anime.synopsis}
+                            </Text>
+                            <View style={styles.featureBottomRow}>
+                              <View style={styles.featureTags}>
+                                {anime.genres.slice(0, 2).map((genre) => (
+                                  <View
+                                    key={genre}
+                                    style={styles.featureGenreTag}
+                                  >
+                                    <Text style={styles.featureGenreTagText}>
+                                      {genre}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
+                              <Pressable
+                                onPress={() => openAnime(anime.id)}
+                                style={styles.featurePlayButton}
+                                accessibilityRole="button"
+                                accessibilityLabel={`View ${anime.title}`}
+                              >
+                                <Ionicons
+                                  name="play"
+                                  size={13}
+                                  color="#09090B"
+                                />
+                                <Text style={styles.featurePlayText}>
+                                  Explore
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                    <View style={styles.featurePagination}>
+                      {featuredAnime.map((anime, index) => (
+                        <View
+                          key={anime.id}
+                          style={[
+                            styles.paginationDot,
+                            index === activeFeatureIndex &&
+                              styles.paginationDotActive,
+                          ]}
+                        />
+                      ))}
+                      <Text style={styles.paginationLabel}>
+                        {String(activeFeatureIndex + 1).padStart(2, "0")} /{" "}
+                        {String(featuredAnime.length).padStart(2, "0")}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+              <View style={styles.genreSection}>
+                <View style={styles.sectionHeading}>
+                  <View>
+                    <Text style={styles.sectionEyebrow}>BROWSE BY MOOD</Text>
+                    <Text style={styles.sectionTitle}>Explore genres</Text>
+                  </View>
+                  <Ionicons
+                    name="options-outline"
+                    size={19}
+                    color={COLORS.mutedForeground}
+                  />
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.genreList}
+                >
+                  {GENRES.map((genre) => (
+                    <GenreChip
+                      key={genre}
+                      label={genre}
+                      selected={selectedGenre === genre}
+                      onPress={() => setSelectedGenre(genre)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.catalogSection}>
+                <View style={styles.catalogHeading}>
+                  <View>
+                    <Text style={styles.sectionEyebrow}>
+                      {category === "For You"
+                        ? "HANDPICKED FOR YOU"
+                        : `THE ${category.toUpperCase()} LIST`}
+                    </Text>
+                    <Text style={styles.sectionTitle}>
+                      {selectedGenre === "All"
+                        ? "Anime to explore"
+                        : `${selectedGenre} anime`}
+                    </Text>
+                  </View>
+                  <View style={styles.resultCount}>
+                    <Text style={styles.resultCountText}>
+                      {items.length}
+                      {hasNext ? "+" : ""} TITLES
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </>
+          }
+          ListEmptyComponent={
+            loading ? (
+              <ActivityIndicator
+                color={COLORS.primary}
+                style={{ paddingVertical: 40 }}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIcon}>
+                  <Ionicons
+                    name="search-outline"
+                    size={24}
+                    color={COLORS.primary}
+                  />
+                </View>
+                <Text style={styles.emptyTitle}>No anime found</Text>
+                <Text style={styles.emptyCopy}>
+                  Try another title or genre to find your next watch.
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setQuery("");
+                    setSelectedGenre("All");
+                    setCategory("For You");
+                  }}
+                  style={styles.resetButton}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.resetButtonText}>Reset filters</Text>
+                </Pressable>
+              </View>
+            )
+          }
+          renderItem={({ item: anime, index }) => {
+            const saved = savedAnimeIds.includes(anime.id);
+            return (
+              <Pressable
+                onPress={() => openAnime(anime.id)}
+                style={[
+                  styles.animeCard,
+                  { width: cardWidth },
+                  index % 2 === 0 ? styles.cardLifted : undefined,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${anime.title}`}
+              >
+                <View style={styles.animePosterWrap}>
+                  <PosterArtwork anime={anime} compact />
+                  <View style={styles.posterTopBadges}>
+                    {anime.status === "Airing" ? (
+                      <View style={styles.airingBadge}>
+                        <View style={styles.airingDot} />
+                        <Text style={styles.airingBadgeText}>AIRING</Text>
+                      </View>
+                    ) : anime.isNew ? (
+                      <View style={styles.newBadge}>
+                        <Text style={styles.newBadgeText}>NEW</Text>
+                      </View>
+                    ) : null}
+                    <Pressable
+                      onPress={() => onToggle(anime)}
+                      style={styles.saveButton}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        saved
+                          ? `Remove ${anime.title} from watchlist`
+                          : `Save ${anime.title}`
+                      }
+                      hitSlop={6}
+                    >
+                      <Ionicons
+                        name={saved ? "heart" : "heart-outline"}
+                        size={15}
+                        color={saved ? "#FB7185" : COLORS.foreground}
+                      />
+                    </Pressable>
+                  </View>
+                  <View style={styles.posterBottomBadges}>
+                    <View style={styles.ratingBadge}>
+                      <Ionicons name="star" size={9} color={COLORS.gold} />
+                      <Text style={styles.ratingBadgeText}>
+                        {anime.rating.toFixed(1)}
+                      </Text>
+                    </View>
+                    <View style={styles.episodeBadge}>
+                      <Text style={styles.episodeBadgeText}>
+                        {anime.episodeCount === 1
+                          ? "MOVIE"
+                          : `${anime.episodeCount} EPS`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.animeCardInfo}>
+                  <Text style={styles.animeCardTitle} numberOfLines={1}>
+                    {anime.title}
+                  </Text>
+                  <Text style={styles.animeCardJapanese} numberOfLines={1}>
+                    {anime.japaneseTitle ?? `${anime.year} · ${anime.status}`}
+                  </Text>
+                  <View style={styles.animeCardTags}>
+                    {anime.genres.slice(0, 2).map((genre) => (
+                      <Text
+                        key={genre}
+                        style={styles.animeCardTag}
+                        numberOfLines={1}
+                      >
+                        {genre}
+                      </Text>
+                    ))}
+                  </View>
+                </View>
+              </Pressable>
+            );
+          }}
+          ListFooterComponent={
+            <View>
+              {loadingMore && (
+                <ActivityIndicator
+                  color={COLORS.primary}
+                  style={{ paddingVertical: 20 }}
+                />
+              )}
+              {!hasNext && !loading && items.length > 0 && (
+                <View style={styles.bottomNote}>
+                  <Ionicons
+                    name="sparkles-outline"
+                    size={13}
+                    color={COLORS.primary}
+                  />
+                  <Text style={styles.bottomNoteText}>
+                    A new story is always waiting.
+                  </Text>
+                </View>
+              )}
             </View>
-          )}
+          }
+        />
 
-          {loadingMore && (
-            <ActivityIndicator
-              color={COLORS.primary}
-              style={{ paddingVertical: 20 }}
-            />
-          )}
-        </View>
-
-        {!hasNext && !loading && items.length > 0 && (
-          <View style={styles.bottomNote}>
-            <Ionicons
-              name="sparkles-outline"
-              size={13}
-              color={COLORS.primary}
-            />
-            <Text style={styles.bottomNoteText}>
-              A new story is always waiting.
-            </Text>
+        {showScrollTop && (
+          <View style={styles.scrollTopControl}>
+            <Svg
+              width={SCROLL_RING_SIZE}
+              height={SCROLL_RING_SIZE}
+              viewBox={`0 0 ${SCROLL_RING_SIZE} ${SCROLL_RING_SIZE}`}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            >
+              <Circle
+                cx={SCROLL_RING_CENTER}
+                cy={SCROLL_RING_CENTER}
+                r={SCROLL_RING_RADIUS}
+                fill="none"
+                stroke="rgba(255,255,255,0.16)"
+                strokeWidth={SCROLL_RING_STROKE}
+              />
+              <AnimatedCircle
+                cx={SCROLL_RING_CENTER}
+                cy={SCROLL_RING_CENTER}
+                r={SCROLL_RING_RADIUS}
+                fill="none"
+                stroke={COLORS.primary}
+                strokeWidth={SCROLL_RING_STROKE}
+                strokeLinecap="round"
+                strokeDasharray={`${SCROLL_RING_CIRCUMFERENCE} ${SCROLL_RING_CIRCUMFERENCE}`}
+                strokeDashoffset={progressRingOffset}
+                rotation={-90}
+                originX={SCROLL_RING_CENTER}
+                originY={SCROLL_RING_CENTER}
+              />
+            </Svg>
+            <Pressable
+              onPress={() =>
+                listRef.current?.scrollToOffset({ offset: 0, animated: true })
+              }
+              style={({ pressed }) => [
+                styles.scrollTopButton,
+                pressed && styles.scrollTopButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Back to top. Page is ${Math.round(scrollProgressValueRef.current * 100)} percent scrolled.`}
+            >
+              <Ionicons name="arrow-up" size={19} color="#FFFFFF" />
+            </Pressable>
           </View>
         )}
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -1105,6 +1228,10 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
   },
+  animeGridRow: {
+    paddingHorizontal: 20,
+    justifyContent: "space-between",
+  },
   animeCard: { marginBottom: 18 },
   cardLifted: {},
   animePosterWrap: {
@@ -1255,6 +1382,34 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(167,139,250,0.14)",
   },
   resetButtonText: { color: "#E6DDFF", fontSize: 8, fontWeight: "800" },
+  scrollTopControl: {
+    position: "absolute",
+    right: 14,
+    bottom: 94,
+    width: 62,
+    height: 62,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scrollTopButton: {
+    width: 49,
+    height: 49,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 25,
+    backgroundColor: "rgba(124,92,252,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(221,214,254,0.34)",
+    shadowColor: COLORS.primaryStrong,
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
+  },
+  scrollTopButtonPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.94 }],
+  },
   bottomNote: {
     flexDirection: "row",
     alignItems: "center",

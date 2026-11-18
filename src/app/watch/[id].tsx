@@ -887,14 +887,7 @@ export default function Watch() {
                   <Pressable
                     key={server.id}
                     onPress={() => {
-                      if (server.id === "s3") {
-                        ToastAndroid.showWithGravity(
-                          "Server unavailable",
-                          ToastAndroid.TOP,
-                          ToastAndroid.SHORT,
-                        );
-                        return;
-                      }
+
                       setSelectedServerId(server.id);
                       setIsServerPickerVisible(false);
                     }}

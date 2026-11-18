@@ -23,6 +23,7 @@ const getHost = (url: string): string => {
 const BASE_ALLOWED_HOSTS = [
   getHost(process.env.EXPO_PUBLIC_API_WATCH ?? ""),
   getHost(process.env.EXPO_PUBLIC_API_WATCH1 ?? ""),
+  getHost(process.env.EXPO_PUBLIC_API_WATCH2 ?? ""),
 ].filter(Boolean);
 
 const EXTRA_ALLOWED_HOSTS: string[] = [];
@@ -200,14 +201,14 @@ export default function AnimeFrame({
       ? `${process.env.EXPO_PUBLIC_API_WATCH}/stream/ani/${id}/${episode}/${audio}`
       : server === "s2"
         ? `${process.env.EXPO_PUBLIC_API_WATCH1}/embed/ani/${id}/${episode}?track=${audio}&autoPlay=1&muted=0&autoSkip=1&autoNext=0&start=0&accent=83e7f4&captionBg=0&hide=next%2Cpip%2Cserver%2Caudio&logo=https://ik.imagekit.io/zyntax/875870128_18108672005577199_374984678886188044_n.jpg&captionSize=s`
-        : "";
+        : `${process.env.EXPO_PUBLIC_API_WATCH2}/embed/ani/${id}/${episode}?track=${audio}`;
 
   const finalRef =
     server === "s1"
       ? `${process.env.EXPO_PUBLIC_API_WATCH}`
       : server === "s2"
         ? `${process.env.EXPO_PUBLIC_API_WATCH1}`
-        : "";
+        : `${process.env.EXPO_PUBLIC_API_WATCH2}`;
 
   if (!finalUrl) {
     return <View style={styles.playerFrame} />;

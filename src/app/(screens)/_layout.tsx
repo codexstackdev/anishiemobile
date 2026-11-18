@@ -1,10 +1,20 @@
-import { useEffect, useRef } from 'react';
-import { Animated, StatusBar, StyleSheet, View } from 'react-native';
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { NavigationBar } from 'expo-navigation-bar';
+import { useEffect, useRef, useState } from "react";
+import { Animated, StatusBar, StyleSheet, View } from "react-native";
+import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { NavigationBar } from "expo-navigation-bar";
+import {
+  addUser,
+  getUser,
+  recordAppOpen,
+  subscribeUser,
+  User,
+} from "@/hooks/userActions";
+import Intro, { IntroProfile } from "../components/Intro";
+import { useOnline } from "@/hooks/useOnline";
+import OfflineBanner from "../components/OfflineBanner";
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
 type AnimatedTabIconProps = {
   focused: boolean;
@@ -57,12 +67,35 @@ function AnimatedTabIcon({
 }
 
 export default function RootLayout() {
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+  const online = useOnline();
+  useEffect(() => {
+    const sync = () => {
+      getUser().then(setUser);
+    };
+    recordAppOpen().then(sync);
+    return subscribeUser(sync);
+  }, []);
+
+  const handleComplete = async (profile: IntroProfile) => {
+    const created = await addUser(profile.displayName, {
+      termsVersion: profile.termsVersion,
+      acceptedAt: profile.acceptedAt,
+    });
+    if (!created) throw new Error("save failed");
+    setUser(created);
+  };
+
+  if (user === undefined) return null;
+  if(!online) return <OfflineBanner/>
+  if (user === null) return <Intro onComplete={handleComplete} />;
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#B9A2FF',
-        tabBarInactiveTintColor: '#77798D',
+        tabBarActiveTintColor: "#B9A2FF",
+        tabBarInactiveTintColor: "#77798D",
         tabBarShowLabel: true,
         tabBarLabelStyle: styles.tabLabel,
         tabBarItemStyle: styles.tabItem,
@@ -73,7 +106,7 @@ export default function RootLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: "Home",
           tabBarIcon: ({ focused, color, size }) => (
             <AnimatedTabIcon
               focused={focused}
@@ -88,7 +121,7 @@ export default function RootLayout() {
       <Tabs.Screen
         name="Discover"
         options={{
-          title: 'Discover',
+          title: "Discover",
           tabBarIcon: ({ focused, color, size }) => (
             <AnimatedTabIcon
               focused={focused}
@@ -103,7 +136,7 @@ export default function RootLayout() {
       <Tabs.Screen
         name="Watchlist"
         options={{
-          title: 'My List',
+          title: "My List",
           tabBarIcon: ({ focused, color, size }) => (
             <AnimatedTabIcon
               focused={focused}
@@ -124,8 +157,8 @@ const styles = StyleSheet.create({
     height: 66,
     paddingTop: 7,
     paddingBottom: 5,
-    backgroundColor: 'rgba(15, 16, 27, 0.97)',
-    borderTopColor: 'rgba(255, 255, 255, 0.09)',
+    backgroundColor: "rgba(15, 16, 27, 0.97)",
+    borderTopColor: "rgba(255, 255, 255, 0.09)",
     borderTopWidth: StyleSheet.hairlineWidth,
     elevation: 0,
   },
@@ -134,22 +167,22 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 9,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 0.2,
     marginTop: 2,
   },
   iconSlot: {
     width: 38,
     height: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   activeIndicator: {
-    position: 'absolute',
+    position: "absolute",
     bottom: -3,
     width: 12,
     height: 3,
     borderRadius: 2,
-    backgroundColor: '#B9A2FF',
+    backgroundColor: "#B9A2FF",
   },
 });
