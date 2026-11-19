@@ -11,8 +11,9 @@ import {
   SearchEntry,
   TrendingAnime,
 } from "@/hooks/types";
-import { getUser, User } from "@/hooks/userActions";
+import { getUser, updateUsername, User } from "@/hooks/userActions";
 import {
+  clearWatchlist,
   isInWatchlist,
   subscribeWatchlist,
   toggleWatchlist,
@@ -22,10 +23,13 @@ import { NavigationBar } from "expo-navigation-bar";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   LayoutChangeEvent,
   Modal,
+  Platform,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -321,6 +325,9 @@ export default function Index() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [recentSearches, setRecentSearches] = useState<SearchEntry[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [usernameDraft, setUsernameDraft] = useState<string>("");
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => {
@@ -346,6 +353,42 @@ export default function Index() {
     };
     getData();
   }, []);
+
+  const openProfileModal = (): void => {
+    setUsernameDraft(user?.username ?? "");
+    setProfileMessage(null);
+    setIsProfileModalOpen(true);
+  };
+
+  const handleSaveUsername = (): void => {
+    const nextUsername = usernameDraft.trim();
+    if (!nextUsername) {
+      setProfileMessage("Enter a username before saving.");
+      return;
+    }
+    updateUsername(usernameDraft);
+    setProfileMessage("Username saved. It will apply after the app restarts." );
+  };
+
+  const handleClearWatchlist = (): void => {
+    Alert.alert(
+      "Clear your watchlist?",
+      "This removes all anime saved to My List. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear watchlist",
+          style: "destructive",
+          onPress: () => {
+            clearWatchlist();
+            setProfileMessage(
+              "Connect this confirmation to your clear-watchlist action.",
+            );
+          },
+        },
+      ],
+    );
+  };
 
   const handleHeroLayout = (event: LayoutChangeEvent): void => {
     const width = event.nativeEvent.layout.width;
@@ -399,9 +442,11 @@ export default function Index() {
                 <Text style={styles.searchGlyph}>⌕</Text>
               </Pressable>
               <Pressable
+                onPress={openProfileModal}
                 style={styles.avatar}
                 accessibilityRole="button"
-                accessibilityLabel="Profile"
+                accessibilityLabel="Open profile settings"
+                accessibilityHint="Edit your username or clear your watchlist"
               >
                 <Text style={styles.avatarText}>
                   {user?.username.slice(0, 2)}
@@ -626,6 +671,142 @@ export default function Index() {
                 <View style={styles.searchTipLine} />
               </View>
             </ScrollView>
+          </SafeAreaView>
+        </Modal>
+
+        <Modal
+          visible={isProfileModalOpen}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setIsProfileModalOpen(false)}
+        >
+          <SafeAreaView style={styles.profileModalSafeArea}>
+            <KeyboardAvoidingView
+              style={styles.profileModalOverlay}
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+            >
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => setIsProfileModalOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close profile settings"
+              />
+
+              <View style={styles.profileSheet}>
+                <View style={styles.profileSheetTopRow}>
+                  <View style={styles.profileTitleGroup}>
+                    <Text style={styles.profileEyebrow}>YOUR ANISHIE</Text>
+                    <Text style={styles.profileTitle}>Profile settings</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setIsProfileModalOpen(false)}
+                    style={styles.profileCloseButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close profile settings"
+                  >
+                    <Ionicons name="close" size={19} color={COLORS.white} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.profileIdentityRow}>
+                  <View style={styles.profileAvatarLarge}>
+                    <Text style={styles.profileAvatarLargeText}>
+                      {(user?.username?.slice(0, 2) || "AN").toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.profileIdentityCopy}>
+                    <Text style={styles.profileIdentityName} numberOfLines={1}>
+                      {user?.username || "Anime fan"}
+                    </Text>
+                    <Text style={styles.profileIdentityCaption}>
+                      Local profile · no sign-up required
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name="sparkles-outline"
+                    size={17}
+                    color={COLORS.purple}
+                  />
+                </View>
+
+                <Text style={styles.profileFieldLabel}>USERNAME</Text>
+                <View style={styles.usernameInputRow}>
+                  <View style={styles.usernameInputShell}>
+                    <Ionicons
+                      name="person-outline"
+                      size={16}
+                      color={COLORS.muted}
+                    />
+                    <TextInput
+                      value={usernameDraft}
+                      onChangeText={(value: string) => {
+                        setUsernameDraft(value);
+                        setProfileMessage(null);
+                      }}
+                      placeholder="Enter your username"
+                      placeholderTextColor="#74768A"
+                      style={styles.usernameInput}
+                      maxLength={15}
+                      autoCapitalize="words"
+                      returnKeyType="done"
+                      accessibilityLabel="Username"
+                    />
+                  </View>
+                  <Pressable
+                    onPress={handleSaveUsername}
+                    style={({ pressed }) => [
+                      styles.saveUsernameButton,
+                      pressed && styles.profileButtonPressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Save username"
+                  >
+                    <Text style={styles.saveUsernameText}>Save</Text>
+                  </Pressable>
+                </View>
+                {profileMessage ? (
+                  <Text
+                    style={styles.profileMessage}
+                    accessibilityLiveRegion="polite"
+                  >
+                    {profileMessage}
+                  </Text>
+                ) : null}
+
+                <View style={styles.profileDivider} />
+
+                <View style={styles.watchlistSettingRow}>
+                  <View style={styles.clearListIcon}>
+                    <Ionicons
+                      name="bookmark-outline"
+                      size={17}
+                      color="#FDA4AF"
+                    />
+                  </View>
+                  <View style={styles.clearListCopy}>
+                    <Text style={styles.clearListTitle}>Watchlist</Text>
+                    <Text style={styles.clearListDescription}>
+                      Remove every anime saved to My List.
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  onPress={handleClearWatchlist}
+                  style={({ pressed }) => [
+                    styles.clearWatchlistButton,
+                    pressed && styles.profileButtonPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear watchlist"
+                >
+                  <Ionicons name="trash-outline" size={16} color="#FDA4AF" />
+                  <Text style={styles.clearWatchlistButtonText}>
+                    Clear watchlist
+                  </Text>
+                </Pressable>
+              </View>
+            </KeyboardAvoidingView>
           </SafeAreaView>
         </Modal>
       </View>
@@ -1111,6 +1292,196 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginHorizontal: 5,
   },
+
+  profileModalSafeArea: {
+    flex: 1,
+    backgroundColor: "rgba(5,5,12,0.72)",
+  },
+  profileModalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  profileSheet: {
+    width: "100%",
+    maxWidth: 440,
+    padding: 20,
+    borderRadius: 24,
+    backgroundColor: "#141520",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.35,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 14,
+  },
+  profileSheetTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  profileTitleGroup: { flex: 1 },
+  profileEyebrow: {
+    color: COLORS.purple,
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    marginBottom: 5,
+  },
+  profileTitle: {
+    color: COLORS.white,
+    fontSize: 20,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  profileCloseButton: {
+    width: 35,
+    height: 35,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  profileIdentityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 21,
+    padding: 12,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+  },
+  profileAvatarLarge: {
+    width: 43,
+    height: 43,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 15,
+    backgroundColor: "rgba(124,92,252,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.4)",
+  },
+  profileAvatarLargeText: {
+    color: "#E4DCFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  profileIdentityCopy: { flex: 1, marginLeft: 11 },
+  profileIdentityName: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  profileIdentityCaption: {
+    color: COLORS.muted,
+    fontSize: 8,
+    marginTop: 4,
+  },
+  profileFieldLabel: {
+    color: COLORS.muted,
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    marginBottom: 8,
+  },
+  usernameInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  usernameInputShell: {
+    height: 47,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    borderRadius: 13,
+    backgroundColor: "#0E0F18",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.24)",
+  },
+  usernameInput: {
+    flex: 1,
+    height: "100%",
+    color: COLORS.white,
+    fontSize: 11,
+    marginLeft: 9,
+    paddingVertical: 0,
+  },
+  saveUsernameButton: {
+    height: 47,
+    minWidth: 66,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+    paddingHorizontal: 13,
+    borderRadius: 13,
+    backgroundColor: COLORS.violet,
+  },
+  saveUsernameText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  profileMessage: {
+    color: "#C4B5FD",
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 8,
+  },
+  profileDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.line,
+    marginTop: 19,
+    marginBottom: 17,
+  },
+  watchlistSettingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  clearListIcon: {
+    width: 37,
+    height: 37,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "rgba(251,113,133,0.1)",
+  },
+  clearListCopy: { flex: 1, marginLeft: 10 },
+  clearListTitle: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  clearListDescription: {
+    color: COLORS.muted,
+    fontSize: 8,
+    marginTop: 4,
+  },
+  clearWatchlistButton: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: "rgba(251,113,133,0.075)",
+    borderWidth: 1,
+    borderColor: "rgba(251,113,133,0.2)",
+  },
+  clearWatchlistButtonText: {
+    color: "#FDA4AF",
+    fontSize: 10,
+    fontWeight: "800",
+    marginLeft: 7,
+  },
+  profileButtonPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
 
   searchScreen: { flex: 1, backgroundColor: COLORS.background },
   searchHeader: {

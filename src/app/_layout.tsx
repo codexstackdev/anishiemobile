@@ -3,11 +3,14 @@ import { View } from "react-native";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import AnishieSplash from "./components/AnishieSplash";
+import { useUpdateCheck } from "@/hooks/versionCheck";
+import Update from "./components/Update";
 
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [showIntro, setShowIntro] = useState<boolean>(true);
+  const { update } = useUpdateCheck();
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => undefined);
@@ -22,6 +25,13 @@ export default function RootLayout() {
         <AnishieSplash
           duration={2700}
           onFinish={() => setShowIntro(false)}
+        />
+      )}
+      {update && !showIntro && (
+        <Update
+          currentVersion={update.current}
+          requiredVersion={update.latest}
+          downloadUrl={update.url}
         />
       )}
     </View>
