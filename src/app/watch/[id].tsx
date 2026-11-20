@@ -17,8 +17,12 @@ import {
   ViewStyle,
 } from "react-native";
 import AnimeFrame from "../components/AnimeFrame";
-import { addFavorite, isFavorite, removeFavorite } from "@/hooks/fileActions";
-import { addToWatchlist, isInWatchlist, removeFromWatchlist, setCurrentEpisode, setWatchStatus } from "@/hooks/watchActions";
+import {
+  addToWatchlist,
+  isInWatchlist,
+  removeFromWatchlist,
+  setCurrentEpisode,
+} from "@/hooks/watchActions";
 
 type EpisodeViewMode = "list" | "grid";
 type AudioMode = "sub" | "dub";
@@ -32,7 +36,11 @@ type PlayerServer = {
 const PLAYER_SERVERS: PlayerServer[] = [
   { id: "s1", label: "Server 1", detail: "Fast · HD" },
   { id: "s2", label: "Server 2", detail: "Backup · HD" },
-  { id: "s3", label: "Server 3", detail: "Alternate source" },
+  {
+    id: "s3",
+    label: "Server 3",
+    detail: "Alternate · Auto-next not supported",
+  },
 ];
 
 const COLORS = {
@@ -326,7 +334,7 @@ export default function Watch() {
     router.setParams({ id: animeId });
   };
 
-  const selectEpisode = async(episode: Episode) => {
+  const selectEpisode = async (episode: Episode) => {
     setSelectedEpisodeId(episode.id);
     setSelectedEpisodeNumber(episode.number);
     await setCurrentEpisode(String(id), episode.number);
@@ -367,6 +375,22 @@ export default function Watch() {
     }
   };
 
+  const onNext = () => {
+    if (isLoading || !data) return;
+
+    const nextNumber = selectedEpisodeNumber + 1;
+    if (nextNumber > totalEpisodeCount) return;
+
+    const nextEpisode =
+      episodes.find((episode) => Number(episode.number) === nextNumber) ??
+      createUnloadedEpisode(nextNumber);
+
+    selectEpisode(nextEpisode);
+  };
+
+  const onNextRef = useRef(onNext);
+  onNextRef.current = onNext;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
@@ -394,6 +418,7 @@ export default function Watch() {
               audio={audioMode}
               episode={selectedEpisodeNumber}
               server={selectedServerId}
+              onEnded={() => onNextRef.current()}
             />
           </View>
 
@@ -887,7 +912,6 @@ export default function Watch() {
                   <Pressable
                     key={server.id}
                     onPress={() => {
-
                       setSelectedServerId(server.id);
                       setIsServerPickerVisible(false);
                     }}

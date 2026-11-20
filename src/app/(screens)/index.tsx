@@ -576,6 +576,7 @@ export default function Index() {
                     },
                   });
                   addSearch(searchQuery);
+                  setIsSearchOpen(false);
                 }}
                 returnKeyType="search"
                 accessibilityLabel="Search anime titles"

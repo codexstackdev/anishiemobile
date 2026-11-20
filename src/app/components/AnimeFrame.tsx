@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -115,6 +115,7 @@ const BEFORE_LOAD_JS = `
       target = target.parentNode;
     }
   }, true);
+  
 
   var adDomains = ${AD_DOMAINS_JS};
   var observer = new MutationObserver(function(mutations) {
@@ -135,38 +136,124 @@ true;
 `;
 
 const AFTER_LOAD_JS = `
-(function() {
-  var style = document.createElement('style');
-  style.textContent = 'html,body{position:fixed!important;top:0;left:0;width:100%!important;height:100%!important;overflow:hidden!important;overscroll-behavior:none!important;touch-action:none!important;}';
-  document.head.appendChild(style);
+(function () {
+  if (window.__hooked) return;
+  window.__hooked = true;
+
+    var base = document.createElement('style');
+  base.textContent = [
+  'html,body{margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:#000!important;overscroll-behavior:none!important;touch-action:manipulation!important;}',
+  'iframe{width:100vw!important;height:100vh!important;border:0!important;}',
+  '.jw-icon-pip,[aria-label*="Picture in Picture" i],[aria-label*="Picture-in-Picture" i]{display:none!important;}',
+'.jw-icon-display, .jw-icon-display .jw-svg-icon, .jw-icon-display .jw-svg-icon path{color:#008DA7!important;fill:#008DA7!important;}',
+'.jw-icon-playback, .jw-icon-playback .jw-svg-icon, .jw-icon-playback .jw-svg-icon path{color:#008DA7!important;fill:#008DA7!important;}',
+'.jw-slider-time .jw-progress{background:#008DA7!important;}',
+'.jw-slider-time .jw-buffer{background:rgba(255,255,255,0.35)!important;}',
+'.jw-slider-time .jw-rail{background:rgba(255,255,255,0.15)!important;}',
+'.jw-slider-time .jw-knob{background:#008DA7!important;}',
+'.jw-icon-buffer, .jw-icon-buffer .jw-svg-icon, .jw-icon-buffer .jw-svg-icon path{color:#008DA7!important;fill:#008DA7!important;}',
+'.jw-slider-volume .jw-progress{background:#008DA7!important;}',
+].join('');
+
+  document.head.appendChild(base);
+
+  var fsStyle = document.createElement('style');
+  document.head.appendChild(fsStyle);
+
+  function post(obj) {
+    window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(obj));
+  }
+
+  var onFsChange = function () {
+    var fs = !!document.fullscreenElement || !!document.webkitFullscreenElement;
+    fsStyle.textContent = fs
+      ? 'video{object-fit:cover!important;width:100vw!important;height:100vh!important;}'
+      : '';
+    post({ isFullscreen: fs });
+  };
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+
+  var sent = false;
+  function ended(src) {
+    if (sent) return;
+    sent = true;
+    post({ ended: true, source: src });
+  }
+
+  function centerDisplayIcon() {
+  var player = document.querySelector('.jwplayer');
+  var btn = document.querySelector('.jw-icon-display');
+  if (!player || !btn) return;
+  btn.style.transform = '';
+  var p = player.getBoundingClientRect();
+  var b = btn.getBoundingClientRect();
+  if (!b.width) return;
+  var dx = (p.left + p.width / 2) - (b.left + b.width / 2);
+  if (Math.abs(dx) > 1) btn.style.transform = 'translateX(' + dx + 'px)';
+}
+setInterval(centerDisplayIcon, 400);
+window.addEventListener('resize', centerDisplayIcon);
+
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) { return; } }
+    if (!d || typeof d !== 'object') return;
+
+    if (d.type === 'aniembed:ended') return ended('s3');
+
+    if (d.channel === 'megacloud' &&
+        (d.event === 'complete' || d.type === 'complete' || d.name === 'complete' ||
+         (d.data && (d.data.event === 'complete' || d.data.type === 'complete')))) {
+      return ended('s1');
+    }
+
+    if (d.channel === 'animeembed' && d.version === 1) {
+      post({ dbg: 'animeembed:' + d.event });
+      if (d.event === 'ended' || d.event === 'complete' || d.event === 'finished') {
+        return ended('s2');
+      }
+      return;
+    }
+  });
 })();
-
-document.addEventListener('fullscreenchange', function() {
-  window.ReactNativeWebView.postMessage(
-    JSON.stringify({ isFullscreen: !!document.fullscreenElement })
-  );
-});
-
 true;
 `;
+
+const wrapperHtml = (src: string) => `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+<iframe src="${src.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"
+  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+  allowfullscreen></iframe>
+</body>
+</html>`;
 
 export default function AnimeFrame({
   id,
   audio,
   server,
   episode,
-  season,
+  onEnded,
 }: {
   id: string;
   audio: "sub" | "dub";
   server?: String;
   episode?: Number;
-  season?: string;
+  onEnded?: () => void;
 }) {
   const [ready, setReady] = useState(false);
-
+  const endedHandledRef = useRef(false);
   useEffect(() => {
     setReady(false);
+    endedHandledRef.current = false;
   }, [id, episode, server, audio]);
 
   const handleFullscreenChange = async (isFullscreen: boolean) => {
@@ -191,6 +278,12 @@ export default function AnimeFrame({
       if (rawData && typeof rawData.isFullscreen !== "undefined") {
         handleFullscreenChange(rawData.isFullscreen);
       }
+
+      if (rawData?.ended && !endedHandledRef.current) {
+        endedHandledRef.current = true;
+        handleFullscreenChange(false);
+        onEnded?.();
+      }
     } catch (error) {
       console.log("❌ Failed to parse message:", error);
     }
@@ -200,7 +293,7 @@ export default function AnimeFrame({
     server === "s1"
       ? `${process.env.EXPO_PUBLIC_API_WATCH}/stream/ani/${id}/${episode}/${audio}`
       : server === "s2"
-        ? `${process.env.EXPO_PUBLIC_API_WATCH1}/embed/ani/${id}/${episode}?track=${audio}&autoPlay=1&muted=0&autoSkip=1&autoNext=0&start=0&accent=83e7f4&captionBg=0&hide=next%2Cpip%2Cserver%2Caudio&logo=https://ik.imagekit.io/zyntax/875870128_18108672005577199_374984678886188044_n.jpg&captionSize=s`
+        ? `${process.env.EXPO_PUBLIC_API_WATCH1}/embed/ani/${id}/${episode}?track=${audio}&autoPlay=1&muted=0&autoSkip=1&autoNext=0&start=0&accent=008da7&captionBg=0&hide=next%2Cpip%2Cserver%2Caudio&logo=https://ik.imagekit.io/zyntax/875870128_18108672005577199_374984678886188044_n.jpg&captionSize=s`
         : `${process.env.EXPO_PUBLIC_API_WATCH2}/embed/ani/${id}/${episode}?track=${audio}`;
 
   const finalRef =
@@ -214,14 +307,17 @@ export default function AnimeFrame({
     return <View style={styles.playerFrame} />;
   }
 
+  const useWrapper = server === "s2";
+
+  const webViewSource = useWrapper
+    ? { html: wrapperHtml(finalUrl), baseUrl: finalRef }
+    : { uri: finalUrl, headers: { Referer: finalRef } };
+
   return (
     <View style={styles.playerFrame}>
       <WebView
         key={finalUrl}
-        source={{
-          uri: finalUrl,
-          headers: { Referer: finalRef },
-        }}
+        source={webViewSource}
         originWhitelist={[
           "https://*",
           "http://*",
